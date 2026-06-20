@@ -1,0 +1,69 @@
+@page "/food"
+@inject HouseholdStore Store
+
+<PageTitle>Food Plan — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">WHAT'S FOR DINNER?</span><h1>Food plan</h1><p>Plan the week, keep favorite recipes, and carry one tidy list to the store.</p></div><div class="button-group"><button class="button magic" @onclick="AutoPlanWeek">✦ Plan my week</button><button class="button primary" @onclick="() => ShowRecipe = !ShowRecipe">＋ New recipe</button></div></section>
+
+@if (!string.IsNullOrWhiteSpace(StatusMessage)) { <div class="success-toast">✓ @StatusMessage</div> }
+
+<div class="food-tabs"><button class="@(Tab == "week" ? "active" : "")" @onclick="ShowWeek">This week</button><button class="@(Tab == "groceries" ? "active" : "")" @onclick="ShowGroceries">Grocery list</button><button class="@(Tab == "recipes" ? "active" : "")" @onclick="ShowRecipes">Recipes</button></div>
+
+@if (ShowRecipe)
+{
+    <section class="panel form-panel"><div class="panel-head"><h2>Save a recipe</h2><button class="icon-button" @onclick="() => ShowRecipe = false">×</button></div><div class="form-grid">
+        <label>Recipe name<input @bind="RecipeDraft.Name" /></label><label>Type<select @bind="RecipeDraft.Category"><option>Breakfast</option><option>Lunch</option><option>Dinner</option><option>Treat</option></select></label>
+        <label>Minutes<input type="number" @bind="RecipeDraft.Minutes" /></label><label class="wide">Ingredients, one per line<textarea @bind="RecipeDraft.Ingredients"></textarea></label><label class="wide">Instructions<textarea @bind="RecipeDraft.Instructions"></textarea></label>
+    </div><button class="button primary" @onclick="AddRecipe" disabled="@(string.IsNullOrWhiteSpace(RecipeDraft.Name))">Save recipe</button></section>
+}
+
+@if (Tab == "week")
+{
+    <section class="week-grid">
+    @foreach (var day in Enumerable.Range(0, 7).Select(i => StartOfWeek.AddDays(i)))
+    {
+        var plan = Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == day.Date);
+        <article class="day-card @(day.Date == DateTime.Today ? "today" : "")"><span>@day.ToString("ddd")</span><strong>@day.Day</strong><select value="@(plan?.Meal ?? "")" @onchange="@(e => SetMeal(day, e.Value?.ToString() ?? string.Empty))"><option value="">Choose dinner…</option>@foreach (var r in Store.Data.Recipes) { <option value="@r.Name">@r.Name</option> }</select></article>
+    }
+    </section>
+}
+else if (Tab == "groceries")
+{
+    <section class="panel grocery-panel"><div class="quick-add"><input @bind="GroceryName" @bind:event="oninput" placeholder="Add milk, apples, snacks…" /><select @bind="GrocerySection"><option>Produce</option><option>Pantry</option><option>Dairy</option><option>Frozen</option><option>Other</option></select><button class="button primary" @onclick="AddGrocery" disabled="@(string.IsNullOrWhiteSpace(GroceryName))">Add</button></div>
+        @foreach (var group in Store.Data.Groceries.OrderBy(x => x.IsChecked).GroupBy(x => x.Section))
+        { <h3 class="list-heading">@group.Key</h3>@foreach (var item in group) { <label class="grocery-row checked-@item.IsChecked.ToString().ToLower()"><input type="checkbox" checked="@item.IsChecked" @onchange="() => ToggleGrocery(item)" /><span>@item.Name</span><button @onclick="() => DeleteGrocery(item)">×</button></label> } }
+    </section>
+}
+else
+{
+    <section class="recipe-grid">@foreach (var recipe in Store.Data.Recipes) { <article class="recipe-card panel"><span class="recipe-art">@(recipe.Category == "Breakfast" ? "☕" : "🍲")</span><div><span class="kicker">@recipe.Category · @recipe.Minutes MIN</span><h2>@recipe.Name</h2><p>@recipe.Ingredients.Split('\n').Length ingredients</p><button class="text-button" @onclick="() => AddIngredients(recipe)">＋ Add ingredients to list</button></div></article> }</section>
+}
+
+@code {
+    string Tab = "week", GroceryName = "", GrocerySection = "Produce", StatusMessage = ""; bool ShowRecipe; Recipe RecipeDraft = new();
+    void ShowWeek() => Tab = "week";
+    void ShowGroceries() => Tab = "groceries";
+    void ShowRecipes() => Tab = "recipes";
+    DateTime StartOfWeek => DateTime.Today.AddDays(-((7 + (int)DateTime.Today.DayOfWeek - (int)DayOfWeek.Monday) % 7));
+    async Task AddRecipe() { Store.Data.Recipes.Add(RecipeDraft); await Store.SaveAsync(); RecipeDraft = new(); ShowRecipe = false; Tab = "recipes"; }
+    async Task AddGrocery() { Store.Data.Groceries.Add(new() { Name = GroceryName.Trim(), Section = GrocerySection }); GroceryName = ""; await Store.SaveAsync(); }
+    async Task ToggleGrocery(GroceryItem item) { item.IsChecked = !item.IsChecked; await Store.SaveAsync(); }
+    async Task DeleteGrocery(GroceryItem item) { Store.Data.Groceries.Remove(item); await Store.SaveAsync(); }
+    async Task SetMeal(DateTime day, string meal) { var p = Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == day.Date); if (p is null) Store.Data.MealPlans.Add(new() { Date = day, Meal = meal }); else p.Meal = meal; await Store.SaveAsync(); }
+    async Task AddIngredients(Recipe recipe) { foreach (var name in recipe.Ingredients.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) if (!Store.Data.Groceries.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) Store.Data.Groceries.Add(new() { Name = name, Section = "Other" }); await Store.SaveAsync(); Tab = "groceries"; }
+    async Task AutoPlanWeek()
+    {
+        var recipes = Store.Data.Recipes.Where(x => x.Category == "Dinner").OrderBy(_ => Random.Shared.Next()).ToList();
+        if (recipes.Count == 0) { StatusMessage = "Add one dinner recipe first, then I can plan the week."; return; }
+        Store.Data.MealPlans.RemoveAll(x => x.Date.Date >= StartOfWeek && x.Date.Date < StartOfWeek.AddDays(7));
+        for (var i = 0; i < 7; i++)
+        {
+            var recipe = recipes[i % recipes.Count];
+            Store.Data.MealPlans.Add(new() { Date = StartOfWeek.AddDays(i), Meal = recipe.Name });
+            foreach (var ingredient in recipe.Ingredients.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (!Store.Data.Groceries.Any(x => x.Name.Equals(ingredient, StringComparison.OrdinalIgnoreCase))) Store.Data.Groceries.Add(new() { Name = ingredient, Section = GuessSection(ingredient) });
+        }
+        await Store.SaveAsync();
+        StatusMessage = "The week is planned and missing ingredients are on the grocery list.";
+    }
+    static string GuessSection(string item) => item.ToLowerInvariant() switch { var x when x.Contains("broccoli") || x.Contains("lemon") || x.Contains("tomato") || x.Contains("avocado") || x.Contains("fruit") => "Produce", var x when x.Contains("chicken") || x.Contains("turkey") => "Other", var x when x.Contains("egg") || x.Contains("parmesan") => "Dairy", _ => "Pantry" };
+}

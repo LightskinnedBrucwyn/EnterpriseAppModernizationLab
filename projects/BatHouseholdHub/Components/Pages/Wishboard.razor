@@ -1,0 +1,94 @@
+@page "/wishboard"
+@inject HouseholdStore Store
+
+<PageTitle>Wishboard — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Purchase wishboard</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Save an idea</button></section>
+
+<section class="search-window panel">
+    <span class="search-icon">⌕</span><input @bind="Search" @bind:event="oninput" placeholder="Search your saved tech, shoes, clothes…" />
+    <a class="button magic" target="_blank" href="@ShoppingSearchUrl">Search the web ↗</a>
+</section>
+
+<section class="capture-bar">
+    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Copy the retailer’s product link, come back here, and paste it.</small></div>
+    <input @bind="QuickUrl" @bind:event="oninput" placeholder="Paste product link here…" />
+    <button class="button primary" disabled="@(!IsWebUrl(QuickUrl))" @onclick="CaptureLink">Make card →</button>
+</section>
+
+@if (ShowForm)
+{
+    <section class="panel form-panel">
+        <div class="panel-head"><div><span class="kicker">PASTE IT HERE</span><h2>Save a purchase idea</h2></div><button class="icon-button" @onclick="() => ShowForm = false">×</button></div>
+        <div class="form-grid">
+            <label>Item name<input @bind="Draft.Name" placeholder="Headphones, boots, laptop…" /></label>
+            <label>Category<select @bind="Draft.Category"><option>Tech</option><option>Shoes</option><option>Clothes</option><option>Home</option><option>Hobby</option><option>Other</option></select></label>
+            <label>For whom?<select @bind="Draft.Owner"><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+            <label>Estimated price<input type="number" step=".01" @bind="Draft.Price" /></label>
+            <label>Already saved<input type="number" step=".01" @bind="Draft.Saved" /></label>
+            <label>Priority<select @bind="Draft.Priority"><option>Need soon</option><option>Would be nice</option><option>Someday</option></select></label>
+            <label class="wide">Product link<input @bind="Draft.ProductUrl" placeholder="https://store.example/item" /></label>
+            <label>Image link<input @bind="Draft.ImageUrl" placeholder="https://…/photo.jpg" /></label>
+            <label class="wide">Notes<textarea @bind="Draft.Notes" placeholder="Why we want it, size, color, alternatives…"></textarea></label>
+        </div>
+        <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="AddIdea">Add to wishboard</button>
+    </section>
+}
+
+<div class="wish-summary">
+    <span><small>PLANNED</small><strong>@Filtered.Sum(x => x.Price).ToString("C0")</strong></span>
+    <span><small>SAVED</small><strong>@Filtered.Sum(x => x.Saved).ToString("C0")</strong></span>
+    <span><small>IDEAS</small><strong>@Filtered.Count()</strong></span>
+</div>
+
+@if (!Filtered.Any())
+{
+    <section class="empty-state"><span>✦</span><h2>No ideas here yet</h2><p>Search the web, copy a product link or image link, and save it here.</p></section>
+}
+else
+{
+    <section class="wish-grid">
+    @foreach (var item in Filtered.OrderBy(x => PriorityRank(x.Priority)).ThenBy(x => x.Name))
+    {
+        var percent = item.Price <= 0 ? 0 : Math.Min(100, item.Saved / item.Price * 100);
+        <article class="wish-card panel">
+            <div class="product-image">
+                @if (IsWebUrl(item.ImageUrl)) { <img src="@item.ImageUrl" alt="@item.Name" /> }
+                else { <span>@CategoryIcon(item.Category)</span> }
+                <b class="priority @item.Priority.Replace(" ", "-").ToLowerInvariant()">@item.Priority</b>
+            </div>
+            <div class="wish-body"><span class="kicker">@item.Category · @item.Owner</span><h2>@item.Name</h2><strong class="product-price">@item.Price.ToString("C")</strong>
+                @if (!string.IsNullOrWhiteSpace(item.Notes)) { <p>@item.Notes</p> }
+                <div class="progress"><i style="width:@percent%"></i></div><small>@item.Saved.ToString("C0") saved · @percent.ToString("0")%</small>
+                <div class="card-actions">@if (IsWebUrl(item.ProductUrl)) { <a class="button magic" target="_blank" href="@item.ProductUrl">View item ↗</a> }<button class="delete-button" title="Remove" @onclick="() => Delete(item)">×</button></div>
+            </div>
+        </article>
+    }
+    </section>
+}
+
+<aside class="api-callout"><span>⚡</span><div><strong>Ready for a shopping agent later</strong><p>A future API can return a title, current price, image, store, and URL. This page already has the fields needed to display those results.</p></div></aside>
+
+@code {
+    string Search = "", QuickUrl = ""; bool ShowForm; PurchaseIdea Draft = new();
+    IEnumerable<PurchaseIdea> Filtered => string.IsNullOrWhiteSpace(Search) ? Store.Data.PurchaseIdeas : Store.Data.PurchaseIdeas.Where(x => $"{x.Name} {x.Category} {x.Owner} {x.Notes}".Contains(Search, StringComparison.OrdinalIgnoreCase));
+    string ShoppingSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(Search) ? "shopping ideas" : Search)}";
+    async Task AddIdea() { Draft.ProductUrl = CleanUrl(Draft.ProductUrl); Draft.ImageUrl = CleanUrl(Draft.ImageUrl); Store.Data.PurchaseIdeas.Add(Draft); await Store.SaveAsync(); Draft = new(); ShowForm = false; }
+    async Task Delete(PurchaseIdea item) { Store.Data.PurchaseIdeas.Remove(item); await Store.SaveAsync(); }
+    void CaptureLink()
+    {
+        if (!IsWebUrl(QuickUrl)) return;
+        var uri = new Uri(QuickUrl);
+        Draft = new PurchaseIdea { ProductUrl = QuickUrl.Trim(), Name = PrettyStoreName(uri.Host) };
+        QuickUrl = "";
+        ShowForm = true;
+    }
+    static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    static string CleanUrl(string value) => IsWebUrl(value) ? value.Trim() : "";
+    static int PriorityRank(string value) => value switch { "Need soon" => 0, "Would be nice" => 1, _ => 2 };
+    static string CategoryIcon(string value) => value switch { "Tech" => "⌘", "Shoes" => "👟", "Clothes" => "👕", "Home" => "⌂", "Hobby" => "★", _ => "✦" };
+    static string PrettyStoreName(string host)
+    {
+        var name = host.Replace("www.", "", StringComparison.OrdinalIgnoreCase).Split('.')[0];
+        return $"Find from {char.ToUpperInvariant(name[0])}{name[1..]}";
+    }
+}

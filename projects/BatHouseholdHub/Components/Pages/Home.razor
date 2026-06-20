@@ -1,0 +1,48 @@
+@page "/"
+@inject HouseholdStore Store
+
+<PageTitle>Bat House — Today</PageTitle>
+
+<section class="hero">
+    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1>Hey, you two. <em>You're doing great.</em></h1><p>Here’s the gentle little snapshot of home today.</p></div>
+    <a class="button primary" href="finances#add">＋ Add transaction</a>
+</section>
+
+<details class="jess-surprise">
+    <summary><span class="love-heart">♥</span><div><small>HEY JESS…</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
+    <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
+</details>
+
+<section class="stat-grid">
+    <div class="stat-card sage"><span>Left this month</span><strong>@Remaining.ToString("C0")</strong><small>@Income.ToString("C0") income · @Spending.ToString("C0") spent</small></div>
+    <div class="stat-card peach"><span>Next card due</span><strong>@NextDue</strong><small>@(Store.Data.CreditAccounts.FirstOrDefault()?.Name ?? "Add a credit card")</small></div>
+    <div class="stat-card butter"><span>Groceries left</span><strong>@Store.Data.Groceries.Count(x => !x.IsChecked) items</strong><small><a href="food">Open the shopping list →</a></small></div>
+    <div class="stat-card lilac"><span>Dinner tonight</span><strong class="meal-name">@TonightMeal</strong><small><a href="food">See the week →</a></small></div>
+</section>
+
+<section class="two-column">
+    <div class="panel">
+        <div class="panel-head"><div><span class="kicker">MONEY FLOW</span><h2>Recent activity</h2></div><a href="finances">View all</a></div>
+        @foreach (var item in Store.Data.Transactions.OrderByDescending(x => x.Date).Take(4))
+        {
+            <div class="activity-row"><span class="category-icon">@Icon(item.Category)</span><div><strong>@item.Description</strong><small>@item.Category · @item.Owner</small></div><b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b></div>
+        }
+    </div>
+    <div class="panel goal-panel">
+        <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><span>🌱</span></div>
+        <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
+        <div class="progress"><i style="width:@GoalPercent%"></i></div>
+        <p>@GoalPercent% there. Every bit counts.</p>
+    </div>
+</section>
+
+@code {
+    decimal Income => Store.Data.Transactions.Where(x => x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
+    decimal Spending => Store.Data.Transactions.Where(x => !x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
+    decimal Remaining => Income - Spending;
+    SavingsGoal Goal => Store.Data.SavingsGoals.FirstOrDefault() ?? new() { Name = "First goal", Target = 1 };
+    int GoalPercent => Goal.Target == 0 ? 0 : (int)Math.Min(100, Goal.Current / Goal.Target * 100);
+    string TonightMeal => Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == DateTime.Today)?.Meal ?? "Pick something cozy";
+    string NextDue { get { var card = Store.Data.CreditAccounts.FirstOrDefault(); return card is null ? "Nothing yet" : $"Day {card.DueDay}"; } }
+    static string Icon(string category) => category switch { "Groceries" => "🛒", "Bills" => "⌁", "Income" => "↗", _ => "•" };
+}

@@ -1,0 +1,12 @@
+services:
+  bat-household-hub:
+    build: .
+    container_name: bat-household-hub
+    restart: unless-stopped
+    ports:
+      - "5188:8080"
+    volumes:
+      - ./data:/app/App_Data
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Production

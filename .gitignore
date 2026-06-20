@@ -1,0 +1,8 @@
+.build-profile/
+**/bin/
+**/obj/
+**/App_Data/
+.vs/
+*.user
+tmp/
+*-deploy.tar.gz

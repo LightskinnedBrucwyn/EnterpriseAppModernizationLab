@@ -1,0 +1,34 @@
+@page "/credit"
+@inject HouseholdStore Store
+
+<PageTitle>Credit — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">CLEAR, NOT SCARY</span><h1>Credit center</h1><p>Keep an eye on balances, due dates, and utilization—without storing card numbers.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add account</button></section>
+
+@if (ShowForm)
+{
+    <section class="panel form-panel"><div class="panel-head"><h2>Add a credit account</h2></div><div class="form-grid">
+        <label>Nickname<input @bind="Draft.Name" placeholder="Everyday card" /></label><label>Last four<input maxlength="4" @bind="Draft.LastFour" /></label>
+        <label>Balance<input type="number" step=".01" @bind="Draft.Balance" /></label><label>Credit limit<input type="number" step=".01" @bind="Draft.Limit" /></label>
+        <label>APR %<input type="number" step=".01" @bind="Draft.Apr" /></label><label>Payment due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+    </div><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="AddAccount">Save account</button></section>
+}
+
+<section class="card-grid">
+@foreach (var card in Store.Data.CreditAccounts)
+{
+    var percent = card.Limit == 0 ? 0 : Math.Min(100, card.Balance / card.Limit * 100);
+    <article class="credit-card panel">
+        <div class="panel-head"><div><span class="kicker">•••• @card.LastFour</span><h2>@card.Name</h2></div><button class="delete-button" @onclick="() => Delete(card)">×</button></div>
+        <div class="goal-amount"><strong>@card.Balance.ToString("C")</strong><span>of @card.Limit.ToString("C")</span></div>
+        <div class="progress"><i class="@(percent > 30 ? "warning" : "")" style="width:@percent%"></i></div>
+        <div class="credit-meta"><span><small>UTILIZATION</small><b>@percent.ToString("0")%</b></span><span><small>APR</small><b>@card.Apr%</b></span><span><small>DUE</small><b>Day @card.DueDay</b></span></div>
+    </article>
+}
+</section>
+<aside class="privacy-note">🔒 Only nicknames and optional last-four digits are stored. Never enter a full card number or bank password.</aside>
+
+@code {
+    CreditAccount Draft = new(); bool ShowForm;
+    async Task AddAccount() { Store.Data.CreditAccounts.Add(Draft); await Store.SaveAsync(); Draft = new(); ShowForm = false; }
+    async Task Delete(CreditAccount item) { Store.Data.CreditAccounts.Remove(item); await Store.SaveAsync(); }
+}
