@@ -16,8 +16,17 @@ Directory.CreateDirectory(dataFolder);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+// Mobile/cellular connections drop and re-establish more than wifi; keep circuits
+// around longer so a flaky connection reconnects instead of silently losing state.
+builder.Services.AddServerSideBlazor(options =>
+{
+    options.DisconnectedCircuitMaxRetained = 100;
+    options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(5);
+    options.JSInteropDefaultCallTimeout = TimeSpan.FromSeconds(30);
+});
 builder.Services.AddSingleton<HouseholdStore>();
 builder.Services.AddHostedService<RecurringTransactionService>();
+builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataFolder, "keys")))
     .SetApplicationName("BatHouseholdHub");

@@ -1,8 +1,9 @@
 @page "/wishboard"
 @inject HouseholdStore Store
+@inject ProductLookupService Lookup
 
 <PageTitle>Wishboard — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Purchase wishboard</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Save an idea</button></section>
+<section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Purchase wishboard</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="OpenAddForm">＋ Save an idea</button></section>
 
 <section class="search-window panel">
     <span class="search-icon">⌕</span><input @bind="Search" @bind:event="oninput" placeholder="Search your saved tech, shoes, clothes…" />
@@ -10,15 +11,21 @@
 </section>
 
 <section class="capture-bar">
-    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Copy the retailer’s product link, come back here, and paste it.</small></div>
-    <input @bind="QuickUrl" @bind:event="oninput" placeholder="Paste product link here…" />
-    <button class="button primary" disabled="@(!IsWebUrl(QuickUrl))" @onclick="CaptureLink">Make card →</button>
+    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>@(Lookup.IsConfigured ? "Paste a link — we'll try to pull the name, price, and photo automatically." : "Copy the retailer’s product link, come back here, and paste it.")</small></div>
+    <input @bind="QuickUrl" @bind:event="oninput" placeholder="Paste product link here…" disabled="@IsLookingUp" />
+    <button class="button primary" disabled="@(!IsWebUrl(QuickUrl) || IsLookingUp)" @onclick="CaptureLink">@(IsLookingUp ? "Looking it up…" : "Make card →")</button>
 </section>
+
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLast">Undo</button> }</div>
+}
+@if (!string.IsNullOrWhiteSpace(LookupNote)) { <div class="import-message error">@LookupNote</div> }
 
 @if (ShowForm)
 {
     <section class="panel form-panel">
-        <div class="panel-head"><div><span class="kicker">PASTE IT HERE</span><h2>Save a purchase idea</h2></div><button class="icon-button" @onclick="() => ShowForm = false">×</button></div>
+        <div class="panel-head"><div><span class="kicker">PASTE IT HERE</span><h2>@(EditingId is null ? "Save a purchase idea" : "Edit purchase idea")</h2></div><button class="icon-button" @onclick="CloseForm">×</button></div>
         <div class="form-grid">
             <label>Item name<input @bind="Draft.Name" placeholder="Headphones, boots, laptop…" /></label>
             <label>Category<select @bind="Draft.Category"><option>Tech</option><option>Shoes</option><option>Clothes</option><option>Home</option><option>Hobby</option><option>Other</option></select></label>
@@ -30,7 +37,10 @@
             <label>Image link<input @bind="Draft.ImageUrl" placeholder="https://…/photo.jpg" /></label>
             <label class="wide">Notes<textarea @bind="Draft.Notes" placeholder="Why we want it, size, color, alternatives…"></textarea></label>
         </div>
-        <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="AddIdea">Add to wishboard</button>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveIdea">@(EditingId is null ? "Add to wishboard" : "Update idea")</button>
+            <button class="text-button" @onclick="ClearForm">Clear</button>
+        </div>
     </section>
 }
 
@@ -59,28 +69,134 @@ else
             <div class="wish-body"><span class="kicker">@item.Category · @item.Owner</span><h2>@item.Name</h2><strong class="product-price">@item.Price.ToString("C")</strong>
                 @if (!string.IsNullOrWhiteSpace(item.Notes)) { <p>@item.Notes</p> }
                 <div class="progress"><i style="width:@percent%"></i></div><small>@item.Saved.ToString("C0") saved · @percent.ToString("0")%</small>
-                <div class="card-actions">@if (IsWebUrl(item.ProductUrl)) { <a class="button magic" target="_blank" href="@item.ProductUrl">View item ↗</a> }<button class="delete-button" title="Remove" @onclick="() => Delete(item)">×</button></div>
+                @if (item.Contributions.Count > 0)
+                {
+                    <small class="contribution-history">@string.Join(" · ", item.Contributions.OrderByDescending(c => c.Date).Take(3).Select(c => $"+{c.Amount:C0} {c.Date:MMM d}"))</small>
+                }
+                <div class="contribute-row">
+                    <input type="number" step=".01" min="0" @bind="ContributionAmount[item.Id]" placeholder="Add $ saved" />
+                    <button class="text-button" @onclick="() => LogContribution(item)">+ Log</button>
+                </div>
+                <div class="card-actions">
+                    @if (IsWebUrl(item.ProductUrl)) { <a class="button magic" target="_blank" href="@item.ProductUrl">View item ↗</a> }
+                    <span class="row-actions"><button class="icon-button" title="Edit" @onclick="() => Edit(item)">✎</button><button class="delete-button" title="Remove" @onclick="() => Delete(item)">×</button></span>
+                </div>
             </div>
         </article>
     }
     </section>
 }
 
-<aside class="api-callout"><span>⚡</span><div><strong>Ready for a shopping agent later</strong><p>A future API can return a title, current price, image, store, and URL. This page already has the fields needed to display those results.</p></div></aside>
+<aside class="api-callout"><span>⚡</span><div><strong>@(Lookup.IsConfigured ? "Smart capture is on" : "Ready for a shopping agent later")</strong><p>@(Lookup.IsConfigured ? "Pasting a link looks up the real title, price, and photo automatically via Claude. You can still edit anything it gets wrong." : "Add an ANTHROPIC_API_KEY on the server to enable automatic title/price/photo lookup when you paste a link.")</p></div></aside>
 
 @code {
     string Search = "", QuickUrl = ""; bool ShowForm; PurchaseIdea Draft = new();
+    Guid? EditingId;
+    bool IsLookingUp;
+    string LookupNote = "";
+    string StatusMessage = "";
+    PurchaseIdea? LastRemoved;
+    int LastRemovedIndex = -1;
+    SafeAmountMap ContributionAmount = new();
+    class SafeAmountMap
+    {
+        readonly Dictionary<Guid, decimal> map = [];
+        public decimal this[Guid id] { get => map.TryGetValue(id, out var v) ? v : 0; set => map[id] = value; }
+    }
     IEnumerable<PurchaseIdea> Filtered => string.IsNullOrWhiteSpace(Search) ? Store.Data.PurchaseIdeas : Store.Data.PurchaseIdeas.Where(x => $"{x.Name} {x.Category} {x.Owner} {x.Notes}".Contains(Search, StringComparison.OrdinalIgnoreCase));
     string ShoppingSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(Search) ? "shopping ideas" : Search)}";
-    async Task AddIdea() { Draft.ProductUrl = CleanUrl(Draft.ProductUrl); Draft.ImageUrl = CleanUrl(Draft.ImageUrl); Store.Data.PurchaseIdeas.Add(Draft); await Store.SaveAsync(); Draft = new(); ShowForm = false; }
-    async Task Delete(PurchaseIdea item) { Store.Data.PurchaseIdeas.Remove(item); await Store.SaveAsync(); }
-    void CaptureLink()
+    void OpenAddForm() { Draft = new(); EditingId = null; ShowForm = true; }
+    void ClearForm() { var keepEditing = EditingId; var id = Draft.Id; Draft = new() { Id = id }; EditingId = keepEditing; }
+    void CloseForm() { ShowForm = false; EditingId = null; }
+    void Edit(PurchaseIdea item)
+    {
+        EditingId = item.Id;
+        Draft = new PurchaseIdea { Id = item.Id, Name = item.Name, Category = item.Category, Owner = item.Owner, Priority = item.Priority, Price = item.Price, Saved = item.Saved, ProductUrl = item.ProductUrl, ImageUrl = item.ImageUrl, Notes = item.Notes, Contributions = item.Contributions };
+        ShowForm = true;
+    }
+    async Task SaveIdea()
+    {
+        LastRemoved = null;
+        Draft.ProductUrl = CleanUrl(Draft.ProductUrl);
+        Draft.ImageUrl = CleanUrl(Draft.ImageUrl);
+        if (EditingId is Guid id)
+        {
+            var existing = Store.Data.PurchaseIdeas.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Name = Draft.Name; existing.Category = Draft.Category; existing.Owner = Draft.Owner;
+                existing.Priority = Draft.Priority; existing.Price = Draft.Price; existing.Saved = Draft.Saved;
+                existing.ProductUrl = Draft.ProductUrl; existing.ImageUrl = Draft.ImageUrl; existing.Notes = Draft.Notes;
+            }
+            StatusMessage = $"Updated \"{Draft.Name}\".";
+        }
+        else
+        {
+            Store.Data.PurchaseIdeas.Add(Draft);
+            StatusMessage = $"Added \"{Draft.Name}\" to the wishboard.";
+        }
+        await Store.SaveAsync();
+        Draft = new(); ShowForm = false; EditingId = null;
+    }
+    async Task Delete(PurchaseIdea item)
+    {
+        LastRemovedIndex = Store.Data.PurchaseIdeas.IndexOf(item);
+        LastRemoved = item;
+        Store.Data.PurchaseIdeas.Remove(item);
+        await Store.SaveAsync();
+        StatusMessage = $"Removed \"{item.Name}\".";
+    }
+    async Task UndoLast()
+    {
+        if (LastRemoved is not null)
+        {
+            Store.Data.PurchaseIdeas.Insert(Math.Min(LastRemovedIndex, Store.Data.PurchaseIdeas.Count), LastRemoved);
+            LastRemoved = null;
+            await Store.SaveAsync();
+        }
+        StatusMessage = "";
+    }
+    async Task LogContribution(PurchaseIdea item)
+    {
+        var amount = ContributionAmount[item.Id];
+        if (amount <= 0) return;
+        item.Saved += amount;
+        item.Contributions.Add(new() { Amount = amount, Date = DateTime.Today });
+        await Store.SaveAsync();
+        StatusMessage = $"Logged +{amount:C} toward \"{item.Name}\".";
+        ContributionAmount[item.Id] = 0;
+    }
+    async Task CaptureLink()
     {
         if (!IsWebUrl(QuickUrl)) return;
-        var uri = new Uri(QuickUrl);
-        Draft = new PurchaseIdea { ProductUrl = QuickUrl.Trim(), Name = PrettyStoreName(uri.Host) };
+        LastRemoved = null;
+        LookupNote = "";
+        var url = QuickUrl.Trim();
+        var uri = new Uri(url);
+        Draft = new PurchaseIdea { ProductUrl = url, Name = PrettyStoreName(uri.Host) };
         QuickUrl = "";
+
+        if (Lookup.IsConfigured)
+        {
+            IsLookingUp = true;
+            try
+            {
+                var result = await Lookup.LookupAsync(url);
+                if (result.Success)
+                {
+                    if (!string.IsNullOrWhiteSpace(result.Name)) Draft.Name = result.Name;
+                    if (result.Price > 0) Draft.Price = result.Price;
+                    if (!string.IsNullOrWhiteSpace(result.ImageUrl)) Draft.ImageUrl = result.ImageUrl;
+                }
+                else
+                {
+                    LookupNote = $"Couldn't auto-fill details ({result.Error}) — fill them in below.";
+                }
+            }
+            finally { IsLookingUp = false; }
+        }
         ShowForm = true;
+        StatusMessage = "";
     }
     static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     static string CleanUrl(string value) => IsWebUrl(value) ? value.Trim() : "";

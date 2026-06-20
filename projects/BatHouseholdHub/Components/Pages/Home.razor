@@ -34,6 +34,11 @@
     </div>
 </section>
 
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLast">Undo</button> }</div>
+}
+
 @if (ShowPaycheckForm)
 {
     <section class="panel form-panel paycheck-panel">
@@ -43,7 +48,10 @@
             <label>Amount<input type="number" step=".01" @bind="PaycheckAmount" /></label>
             <label>Date<input type="date" @bind="PaycheckDate" /></label>
         </div>
-        <button class="button primary" disabled="@(PaycheckAmount <= 0)" @onclick="LogPaycheck">Log it — updates income right away</button>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(PaycheckAmount <= 0)" @onclick="LogPaycheck">Log it — updates income right away</button>
+            <button class="text-button" @onclick="ClearPaycheckForm">Clear</button>
+        </div>
     </section>
 }
 
@@ -68,25 +76,32 @@
 <section class="two-column">
     <div class="panel">
         <div class="panel-head"><div><span class="kicker">MONEY FLOW</span><h2>Recent activity</h2></div><a href="finances">View all</a></div>
+        @if (!Store.Data.Transactions.Any())
+        {
+            <p class="muted">Nothing logged yet — add a transaction or log a paycheck above.</p>
+        }
         @foreach (var item in Store.Data.Transactions.OrderByDescending(x => x.Date).Take(4))
         {
-            <div class="activity-row"><span class="category-icon">@Icon(item.Category)</span><div><strong>@item.Description</strong><small>@item.Category · @item.Owner</small></div><b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b></div>
+            <div class="activity-row"><span class="category-icon">@Icon(item.Category)</span><div><strong>@item.Description</strong><small>@item.Category · @item.Owner · @item.Date.ToString("MMM d")</small></div><b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b><button title="Remove" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></div>
         }
     </div>
     <div class="panel goal-panel">
-        @if (Goal is null)
+        @if (Goal is null || EditingGoal)
         {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>No goal set yet</h2></div><span>🌱</span></div>
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
             <div class="form-grid">
                 <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
                 <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
                 <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
             </div>
-            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="AddGoal">Save goal</button>
+            <div class="form-actions">
+                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
+                @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
+            </div>
         }
         else
         {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><span>🌱</span></div>
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
             <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
             <div class="progress"><i style="width:@GoalPercent%"></i></div>
             <p>@GoalPercent% there. Every bit counts.</p>
@@ -119,8 +134,17 @@
     decimal Remaining => Income - Spending;
     SavingsGoal? Goal => Store.Data.SavingsGoals.FirstOrDefault();
     SavingsGoal GoalDraft = new();
+    bool EditingGoal;
     int GoalPercent => Goal is null || Goal.Target == 0 ? 0 : (int)Math.Min(100, Goal.Current / Goal.Target * 100);
-    async Task AddGoal() { Store.Data.SavingsGoals.Add(GoalDraft); await Store.SaveAsync(); GoalDraft = new(); }
+    void StartEditGoal() { if (Goal is not null) { GoalDraft = new() { Id = Goal.Id, Name = Goal.Name, Current = Goal.Current, Target = Goal.Target }; EditingGoal = true; } }
+    async Task SaveGoal()
+    {
+        if (Goal is { } existing) { existing.Name = GoalDraft.Name; existing.Current = GoalDraft.Current; existing.Target = GoalDraft.Target; }
+        else { Store.Data.SavingsGoals.Add(GoalDraft); }
+        await Store.SaveAsync();
+        GoalDraft = new();
+        EditingGoal = false;
+    }
     string TonightMeal => Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == DateTime.Today)?.Meal ?? "Pick something cozy";
     string NextDue { get { var card = Store.Data.CreditAccounts.FirstOrDefault(); return card is null ? "Nothing yet" : $"Day {card.DueDay}"; } }
     static string Icon(string category) => category switch { "Groceries" => "🛒", "Bills" => "⌁", "Income" => "↗", _ => "•" };
@@ -144,20 +168,46 @@
     string PaycheckOwner = "Me";
     decimal PaycheckAmount;
     DateTime PaycheckDate = DateTime.Today;
+    string StatusMessage = "";
+    Transaction? LastRemoved;
+    int LastRemovedIndex = -1;
+    void ClearPaycheckForm() { PaycheckAmount = 0; PaycheckDate = DateTime.Today; }
     async Task LogPaycheck()
     {
+        LastRemoved = null;
+        var amount = PaycheckAmount;
+        var owner = PaycheckOwner;
         Store.Data.Transactions.Add(new()
         {
-            Description = $"{PaycheckOwner} paycheck",
+            Description = $"{owner} paycheck",
             Category = "Income",
-            Owner = PaycheckOwner,
-            Amount = PaycheckAmount,
+            Owner = owner,
+            Amount = amount,
             IsIncome = true,
             Date = PaycheckDate
         });
         await Store.SaveAsync();
+        StatusMessage = $"Logged {owner}'s paycheck — +{amount:C}. It's already counted in this month's income below.";
         PaycheckAmount = 0;
         PaycheckDate = DateTime.Today;
         ShowPaycheckForm = false;
+    }
+    async Task DeleteTransaction(Transaction item)
+    {
+        LastRemovedIndex = Store.Data.Transactions.IndexOf(item);
+        LastRemoved = item;
+        Store.Data.Transactions.Remove(item);
+        await Store.SaveAsync();
+        StatusMessage = $"Removed \"{item.Description}\".";
+    }
+    async Task UndoLast()
+    {
+        if (LastRemoved is not null)
+        {
+            Store.Data.Transactions.Insert(Math.Min(LastRemovedIndex, Store.Data.Transactions.Count), LastRemoved);
+            LastRemoved = null;
+            await Store.SaveAsync();
+        }
+        StatusMessage = "";
     }
 }

@@ -3,7 +3,7 @@
 @inject ILoggerFactory LoggerFactory
 
 <PageTitle>Money — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">MONEY, MADE FRIENDLY</span><h1>Household finances</h1><p>Track what comes in, what goes out, and who covered what.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add transaction</button></section>
+<section class="page-heading"><div><span class="kicker">MONEY, MADE FRIENDLY</span><h1>Household finances</h1><p>Track what comes in, what goes out, and who covered what.</p></div><button class="button primary" @onclick="OpenAddForm">＋ Add transaction</button></section>
 
 <section class="panel rocket-import">
     <div class="rocket-copy"><span class="rocket-mark">🚀</span><div><span class="kicker">ROCKET MONEY IMPORT</span><h2>Update from your real accounts</h2><p>Transfers, card payments, savings moves, and investments are excluded so they aren’t counted twice.</p></div></div>
@@ -20,10 +20,15 @@
     <div class="import-message success"><strong>✓ Rocket Money is up to date</strong><span>@RocketResult.Imported.ToString("N0") transactions imported · @RocketResult.ExcludedTransfers.ToString("N0") transfers excluded · @RocketResult.AccountCount accounts · @RocketResult.EarliestDate?.ToString("MMM yyyy")–@RocketResult.LatestDate?.ToString("MMM yyyy")</span></div>
 }
 
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLast">Undo</button> }</div>
+}
+
 @if (ShowForm)
 {
     <section class="panel form-panel" id="add">
-        <div class="panel-head"><h2>New transaction</h2><button class="icon-button" @onclick="() => ShowForm = false">×</button></div>
+        <div class="panel-head"><h2>@(EditingId is null ? "New transaction" : "Edit transaction")</h2><button class="icon-button" @onclick="CloseForm">×</button></div>
         <div class="form-grid">
             <label>Description<input @bind="Draft.Description" placeholder="Coffee, rent, paycheck…" /></label>
             <label>Amount<input type="number" step="0.01" @bind="Draft.Amount" /></label>
@@ -31,10 +36,16 @@
             <label>Who?<select @bind="Draft.Owner"><option>Shared</option><option>Me</option><option>Jess</option></select></label>
             <label>Date<input type="date" @bind="Draft.Date" /></label>
             <label class="check-label"><input type="checkbox" @bind="Draft.IsIncome" /> This is income</label>
-            <label class="check-label"><input type="checkbox" @bind="MakeRecurring" /> Repeat monthly</label>
-            @if (MakeRecurring) { <label>Post on day<input type="number" min="1" max="28" @bind="RecurringDay" /></label> }
+            @if (EditingId is null)
+            {
+                <label class="check-label"><input type="checkbox" @bind="MakeRecurring" /> Repeat monthly</label>
+                @if (MakeRecurring) { <label>Post on day<input type="number" min="1" max="28" @bind="RecurringDay" /></label> }
+            }
         </div>
-        <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Description) || Draft.Amount <= 0)" @onclick="AddTransaction">Save transaction</button>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Description) || Draft.Amount <= 0)" @onclick="SaveTransaction">@(EditingId is null ? "Save transaction" : "Update transaction")</button>
+            <button class="text-button" @onclick="ClearForm">Clear</button>
+        </div>
     </section>
 }
 
@@ -70,7 +81,7 @@
             var reviewReason = ReviewReason(item);
             <article class="transaction-album @(item.IsIncome ? "income-album" : "")">
                 <div class="album-art @CategoryClass(item.Category)"><span>@CategoryIcon(item.Category, item.IsIncome)</span><small>@item.Date.ToString("MMM")</small><strong>@item.Date.Day</strong>@if (reviewReason is not null) { <b class="review-sticker">@reviewReason</b> }</div>
-                <div class="album-details"><span class="kicker">@item.Category</span><h3>@item.Description</h3><div class="album-meta"><span>@item.Owner</span>@if (!string.IsNullOrWhiteSpace(item.Account)) { <span>@item.Account</span> }</div><div class="album-footer"><strong class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</strong><button title="Remove transaction" class="delete-button" @onclick="() => Delete(item)">×</button></div></div>
+                <div class="album-details"><span class="kicker">@item.Category</span><h3>@item.Description</h3><div class="album-meta"><span>@item.Owner</span>@if (!string.IsNullOrWhiteSpace(item.Account)) { <span>@item.Account</span> }</div><div class="album-footer"><strong class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</strong><span class="row-actions"><button title="Edit transaction" class="icon-button" @onclick="() => Edit(item)">✎</button><button title="Remove transaction" class="delete-button" @onclick="() => Delete(item)">×</button></span></div></div>
             </article>
         }
         </div>
@@ -141,7 +152,52 @@
     decimal Income => Month.Where(x => x.IsIncome).Sum(x => x.Amount);
     decimal Spending => Month.Where(x => !x.IsIncome).Sum(x => x.Amount);
     decimal Shared => Month.Where(x => !x.IsIncome && x.Owner == "Shared").Sum(x => x.Amount);
-    async Task AddTransaction() { Store.Data.Transactions.Add(Draft); if (MakeRecurring) Store.Data.RecurringTransactions.Add(new() { Description = Draft.Description, Category = Draft.Category, Owner = Draft.Owner, Amount = Draft.Amount, IsIncome = Draft.IsIncome, DayOfMonth = RecurringDay }); await Store.SaveAsync(); Draft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; ShowForm = false; }
+    Guid? EditingId;
+    string StatusMessage = "";
+    Transaction? LastRemoved;
+    int LastRemovedIndex = -1;
+    void OpenAddForm() { Draft = new(); EditingId = null; MakeRecurring = false; ShowForm = true; }
+    void ClearForm() { var keepEditing = EditingId; Draft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; EditingId = keepEditing; }
+    void CloseForm() { ShowForm = false; EditingId = null; }
+    void Edit(Transaction item)
+    {
+        EditingId = item.Id;
+        Draft = new Transaction { Id = item.Id, Description = item.Description, Category = item.Category, Owner = item.Owner, Amount = item.Amount, IsIncome = item.IsIncome, Date = item.Date, Account = item.Account, Institution = item.Institution, Source = item.Source, SourceKey = item.SourceKey, RecurringRuleId = item.RecurringRuleId };
+        ShowForm = true;
+    }
+    async Task SaveTransaction()
+    {
+        LastRemoved = null;
+        if (EditingId is Guid id)
+        {
+            var existing = Store.Data.Transactions.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Description = Draft.Description; existing.Category = Draft.Category; existing.Owner = Draft.Owner;
+                existing.Amount = Draft.Amount; existing.IsIncome = Draft.IsIncome; existing.Date = Draft.Date;
+            }
+            StatusMessage = $"Updated \"{Draft.Description}\".";
+        }
+        else
+        {
+            Store.Data.Transactions.Add(Draft);
+            if (MakeRecurring) Store.Data.RecurringTransactions.Add(new() { Description = Draft.Description, Category = Draft.Category, Owner = Draft.Owner, Amount = Draft.Amount, IsIncome = Draft.IsIncome, DayOfMonth = RecurringDay });
+            StatusMessage = $"Added \"{Draft.Description}\" — {(Draft.IsIncome ? "+" : "-")}{Draft.Amount:C}.";
+        }
+        await Store.SaveAsync();
+        CalculateReviewThreshold();
+        Draft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; ShowForm = false; EditingId = null;
+    }
+    async Task UndoLast()
+    {
+        if (LastRemoved is not null)
+        {
+            Store.Data.Transactions.Insert(Math.Min(LastRemovedIndex, Store.Data.Transactions.Count), LastRemoved);
+            LastRemoved = null;
+            await Store.SaveAsync();
+        }
+        StatusMessage = "";
+    }
     protected override void OnInitialized() => CalculateReviewThreshold();
     void CalculateReviewThreshold()
     {
@@ -159,7 +215,15 @@
     void ResetFilters() { SearchQuery = ""; DateFilter = "This month"; CategoryFilter = "All categories"; AccountFilter = "All accounts"; TypeFilter = "Everything"; OwnerFilter = "Everyone"; SortFilter = "Newest first"; OnlyReview = false; VisibleCount = 60; }
     static string CategoryClass(string category) => $"cat-{new string(category.ToLowerInvariant().Where(char.IsLetterOrDigit).Take(12).ToArray())}";
     static string CategoryIcon(string category, bool income) => income ? "↗" : category switch { "Groceries" => "🛒", "Dining & Drinks" => "☕", "Shopping" => "✦", "Bills & Utilities" => "⌁", "Software & Tech" => "⌘", "Auto & Transport" => "◆", "Entertainment & Rec." => "♪", "Fees" => "!", "Uncategorized" => "?", _ => "•" };
-    async Task Delete(Transaction item) { Store.Data.Transactions.Remove(item); CalculateReviewThreshold(); await Store.SaveAsync(); }
+    async Task Delete(Transaction item)
+    {
+        LastRemovedIndex = Store.Data.Transactions.IndexOf(item);
+        LastRemoved = item;
+        Store.Data.Transactions.Remove(item);
+        CalculateReviewThreshold();
+        await Store.SaveAsync();
+        StatusMessage = $"Removed \"{item.Description}\".";
+    }
     async Task ImportRocket(InputFileChangeEventArgs args)
     {
         ImportError = ""; RocketResult = null; IsImporting = true;

@@ -119,4 +119,11 @@ public class PurchaseIdea
     public string ProductUrl { get; set; } = "";
     public string ImageUrl { get; set; } = "";
     public string Notes { get; set; } = "";
+    public List<WishContribution> Contributions { get; set; } = [];
+}
+
+public class WishContribution
+{
+    public decimal Amount { get; set; }
+    public DateTime Date { get; set; } = DateTime.Today;
 }
