@@ -48,9 +48,3 @@ Rebuild part of the console app as a Blazor web application.
 ## Phase 6: Modernization Notes
 
 Document legacy .NET Framework to modern .NET migration concepts.
-"@ | Set-Content docs\roadmap.md
-
-git add docs\roadmap.md
-git commit -m "Add project roadmap"
-git push
-git status
