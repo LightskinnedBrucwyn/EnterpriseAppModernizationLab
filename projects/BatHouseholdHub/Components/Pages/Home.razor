@@ -4,8 +4,17 @@
 <PageTitle>Bat House — Today</PageTitle>
 
 <section class="hero">
+    <div class="hero-blob" aria-hidden="true"></div>
     <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1>Hey, you two. <em>You're doing great.</em></h1><p>Here’s the gentle little snapshot of home today.</p></div>
-    <a class="button primary" href="finances#add">＋ Add transaction</a>
+    <div class="hero-side">
+        <a class="button primary" href="finances#add">＋ Add transaction</a>
+        <svg class="organic-sticker" viewBox="0 0 160 130" aria-hidden="true">
+            <path id="arcPath" d="M 14 88 A 66 66 0 0 1 146 88" fill="none" />
+            <text text-anchor="middle">
+                <textPath href="#arcPath" startOffset="50%" text-anchor="middle">ORGANIC</textPath>
+            </text>
+        </svg>
+    </div>
 </section>
 
 <details class="jess-surprise">
@@ -39,6 +48,7 @@
         <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
         <div class="progress"><i style="width:@GoalPercent%"></i></div>
         <p>@GoalPercent% there. Every bit counts.</p>
+        <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
     </div>
 </section>
 
