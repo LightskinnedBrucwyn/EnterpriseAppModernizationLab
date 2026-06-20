@@ -1,6 +1,8 @@
 @page "/wishboard"
 @inject HouseholdStore Store
 @inject ProductLookupService Lookup
+@inject OpenGraphScraperService Scraper
+@inject HomeButlerService Butler
 
 <PageTitle>Wishboard — Bat House</PageTitle>
 <section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Purchase wishboard</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="OpenAddForm">＋ Save an idea</button></section>
@@ -11,7 +13,7 @@
 </section>
 
 <section class="capture-bar">
-    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>@(Lookup.IsConfigured ? "Paste a link — we'll try to pull the name, price, and photo automatically." : "Copy the retailer’s product link, come back here, and paste it.")</small></div>
+    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Paste a link — we'll try to pull the name, price, and photo straight from the page automatically.</small></div>
     <input @bind="QuickUrl" @bind:event="oninput" placeholder="Paste product link here…" disabled="@IsLookingUp" />
     <button class="button primary" disabled="@(!IsWebUrl(QuickUrl) || IsLookingUp)" @onclick="CaptureLink">@(IsLookingUp ? "Looking it up…" : "Make card →")</button>
 </section>
@@ -87,7 +89,7 @@ else
     </section>
 }
 
-<aside class="api-callout"><span>⚡</span><div><strong>@(Lookup.IsConfigured ? "Smart capture is on" : "Ready for a shopping agent later")</strong><p>@(Lookup.IsConfigured ? "Pasting a link looks up the real title, price, and photo automatically via Claude. You can still edit anything it gets wrong." : "Add an ANTHROPIC_API_KEY on the server to enable automatic title/price/photo lookup when you paste a link.")</p></div></aside>
+<aside class="api-callout"><span>⚡</span><div><strong>Smart capture, cheapest option first</strong><p>Pasting a link tries the page's own product data first (free), then <a href="butler">Home Butler</a> if it's configured, then Claude only as a last resort. <a href="butler">Check Home Butler status →</a></p></div></aside>
 
 @code {
     string Search = "", QuickUrl = ""; bool ShowForm; PurchaseIdea Draft = new();
@@ -171,32 +173,47 @@ else
         if (!IsWebUrl(QuickUrl)) return;
         LastRemoved = null;
         LookupNote = "";
+        StatusMessage = "";
         var url = QuickUrl.Trim();
         var uri = new Uri(url);
         Draft = new PurchaseIdea { ProductUrl = url, Name = PrettyStoreName(uri.Host) };
         QuickUrl = "";
 
-        if (Lookup.IsConfigured)
+        IsLookingUp = true;
+        try
         {
-            IsLookingUp = true;
-            try
+            // Free first: most storefronts embed Open Graph / JSON-LD product data directly in the page.
+            var result = await Scraper.ScrapeAsync(url);
+            var source = "the page itself";
+
+            // Local LLM next (no token cost) -- only useful once Ollama/Qwen is reachable and wired up.
+            if (!result.Success && Butler.IsConfigured)
             {
-                var result = await Lookup.LookupAsync(url);
-                if (result.Success)
-                {
-                    if (!string.IsNullOrWhiteSpace(result.Name)) Draft.Name = result.Name;
-                    if (result.Price > 0) Draft.Price = result.Price;
-                    if (!string.IsNullOrWhiteSpace(result.ImageUrl)) Draft.ImageUrl = result.ImageUrl;
-                }
-                else
-                {
-                    LookupNote = $"Couldn't auto-fill details ({result.Error}) — fill them in below.";
-                }
+                result = await Butler.LookupAsync(url, pageExcerpt: url);
+                source = "Home Butler";
             }
-            finally { IsLookingUp = false; }
+
+            // Paid API as a last resort, only if explicitly configured.
+            if (!result.Success && Lookup.IsConfigured)
+            {
+                result = await Lookup.LookupAsync(url);
+                source = "Claude";
+            }
+
+            if (result.Success)
+            {
+                if (!string.IsNullOrWhiteSpace(result.Name)) Draft.Name = result.Name;
+                if (result.Price > 0) Draft.Price = result.Price;
+                if (!string.IsNullOrWhiteSpace(result.ImageUrl)) Draft.ImageUrl = result.ImageUrl;
+                StatusMessage = $"Pulled product details from {source}.";
+            }
+            else
+            {
+                LookupNote = $"Couldn't auto-fill details ({result.Error}) — fill them in below.";
+            }
         }
+        finally { IsLookingUp = false; }
         ShowForm = true;
-        StatusMessage = "";
     }
     static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     static string CleanUrl(string value) => IsWebUrl(value) ? value.Trim() : "";

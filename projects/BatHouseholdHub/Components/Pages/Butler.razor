@@ -1,0 +1,69 @@
+@page "/butler"
+@inject HouseholdStore Store
+@inject HomeButlerService ButlerService
+
+<PageTitle>Home Butler — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">YOUR OWN LLM, NO TOKENS BURNED</span><h1>Home Butler</h1><p>Point this at your local Qwen/Ollama server so day-to-day smart features run for free instead of spending Claude or OpenAI credits.</p></div></section>
+
+<section class="panel form-panel">
+    <div class="panel-head"><h2>Connection</h2></div>
+    <div class="form-grid">
+        <label>Ollama base URL<input @bind="Settings.BaseUrl" placeholder="http://100.x.x.x:11434" /></label>
+        <label>Model name<input @bind="Settings.Model" placeholder="qwen2.5" /></label>
+    </div>
+    <div class="form-actions">
+        <button class="button primary" @onclick="Save">Save settings</button>
+        <button class="text-button" @onclick="TestConnection" disabled="@IsTesting">@(IsTesting ? "Testing…" : "Test connection")</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(StatusMessage))
+    {
+        <div class="import-message @(LastTestOk == true ? "success" : "error")" style="margin-top:16px">@StatusMessage</div>
+    }
+</section>
+
+<section class="panel">
+    <div class="panel-head"><h2>What this powers right now</h2></div>
+    <p class="muted">The <a href="wishboard">wishboard</a> tries Home Butler as a free fallback when a pasted product
+        link doesn't have enough embedded data for direct parsing, before ever reaching for a paid API.</p>
+    <p class="muted" style="margin-top:10px"><strong>Status:</strong> @(ButlerService.IsConfigured ? "Configured — base URL is set." : "Not configured yet — add a base URL above.")</p>
+    @if (ButlerService.IsConfigured)
+    {
+        // TODO: once the actual chat-completion call is wired up in HomeButlerService.LookupAsync,
+        // this note can go away -- right now the lookup endpoint is a stub that always reports
+        // "not wired up yet" even when the connection test above succeeds.
+        <p class="muted" style="margin-top:10px">⚠ Lookup itself is still a stub pending the Ollama call being filled in -- see the TODO in <code>HomeButlerService.cs</code>.</p>
+    }
+</section>
+
+@code {
+    HomeButlerSettings Settings = new();
+    bool IsTesting;
+    bool? LastTestOk;
+    string StatusMessage = "";
+
+    protected override void OnInitialized()
+    {
+        Settings = new() { BaseUrl = Store.Data.HomeButler.BaseUrl, Model = Store.Data.HomeButler.Model };
+    }
+
+    async Task Save()
+    {
+        Store.Data.HomeButler.BaseUrl = Settings.BaseUrl.Trim();
+        Store.Data.HomeButler.Model = string.IsNullOrWhiteSpace(Settings.Model) ? "qwen2.5" : Settings.Model.Trim();
+        await Store.SaveAsync();
+        StatusMessage = "Saved.";
+        LastTestOk = true;
+    }
+
+    async Task TestConnection()
+    {
+        IsTesting = true;
+        try
+        {
+            var (reachable, message) = await ButlerService.TestConnectionAsync();
+            LastTestOk = reachable;
+            StatusMessage = reachable ? $"Reachable — {message}" : message;
+        }
+        finally { IsTesting = false; }
+    }
+}

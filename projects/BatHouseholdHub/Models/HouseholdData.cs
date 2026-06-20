@@ -11,6 +11,16 @@ public class HouseholdData
     public List<RecurringTransaction> RecurringTransactions { get; set; } = [];
     public List<PurchaseIdea> PurchaseIdeas { get; set; } = [];
     public List<UploadedFile> UploadedFiles { get; set; } = [];
+    public HomeButlerSettings HomeButler { get; set; } = new();
+}
+
+/// <summary>Connection settings for the local LLM ("Home Butler") used as a free,
+/// no-token fallback for tasks like wishboard product lookup once Open Graph scraping
+/// comes up empty. Points at an Ollama-compatible server on the household's own network.</summary>
+public class HomeButlerSettings
+{
+    public string BaseUrl { get; set; } = "";
+    public string Model { get; set; } = "qwen2.5";
 }
 
 public class UploadedFile

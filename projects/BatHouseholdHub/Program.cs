@@ -27,6 +27,8 @@ builder.Services.AddServerSideBlazor(options =>
 builder.Services.AddSingleton<HouseholdStore>();
 builder.Services.AddHostedService<RecurringTransactionService>();
 builder.Services.AddHttpClient<ProductLookupService>();
+builder.Services.AddHttpClient<OpenGraphScraperService>();
+builder.Services.AddHttpClient<HomeButlerService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataFolder, "keys")))
     .SetApplicationName("BatHouseholdHub");
