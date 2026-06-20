@@ -15,8 +15,8 @@
 
 <section class="cat-corner">
     <span class="cat-face">@CatFace</span>
-    <div><span class="kicker">VIBES CORNER, COURTESY OF THE CATS</span><blockquote>“@Quote”</blockquote><cite>— inspired by Larry June energy</cite></div>
-    <button class="button primary" @onclick="ShuffleVibes">🐾 New vibe</button>
+    <div><span class="kicker">THE GOTHAM LOUNGE</span><blockquote>“@Quote”</blockquote><cite>— low-key Larry June energy, Gotham edition</cite></div>
+    <button class="button primary" @onclick="ShuffleVibes">🦇 New vibe</button>
 </section>
 
 <section class="stat-grid">
@@ -43,19 +43,19 @@
 </section>
 
 @code {
-    static readonly string[] CatFaces = ["🐱", "🐈", "🐈‍⬛", "😼", "🙀➡️😻"];
+    static readonly string[] CatFaces = ["🦇", "🐾", "💜", "🌙", "💎"];
     static readonly string[] Vibes =
     [
-        "Sip the orange juice, water the plants, let the bread proof. That's the whole morning.",
-        "Organic everything, even the vibes. Stay rooted, stay easy.",
+        "Sip the orange juice, water the plants, patrol the block. That's the whole morning.",
+        "Organic everything, even the vibes. Stay rooted, stay easy, stay sharp.",
         "Real estate in your mind too — keep that space clean and paid off.",
-        "Slow cook the rice, slow cook the plan. Good things don't rush.",
-        "Fresh air, fresh produce, fresh start. Repeat tomorrow.",
+        "Slow cook the rice, slow cook the plan. Good things don't rush, not even at night.",
+        "Fresh air, fresh produce, fresh start. The cape's optional, the calm isn't.",
         "Stack the small wins like groceries — one bag at a time, no rush.",
-        "Cats nap in the sun for a reason. Take the nap.",
+        "Even the night watch naps in the sun when it can. Take the nap.",
         "Keep the budget warm and the kitchen warmer.",
-        "Every cozy house started with someone choosing calm over chaos.",
-        "Drink water, check the savings goal, pet the cat. In that order."
+        "Every safehouse started with someone choosing calm over chaos.",
+        "Drink water, check the savings goal, keep the claws sheathed for family."
     ];
     string CatFace = CatFaces[0];
     string Quote = Vibes[0];
