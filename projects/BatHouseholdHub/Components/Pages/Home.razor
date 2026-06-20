@@ -28,10 +28,24 @@
     <div class="hero-blob" aria-hidden="true"></div>
     <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1 class="hashtag-hero">#GoodJobTreyAndJess</h1><p>Here’s the gentle little snapshot of home today.</p></div>
     <div class="hero-side">
+        <button class="button magic" @onclick="() => ShowPaycheckForm = !ShowPaycheckForm">💰 Log paycheck</button>
         <a class="button primary" href="finances#add">＋ Add transaction</a>
         <span class="organic-sticker" aria-hidden="true">ORGANIC</span>
     </div>
 </section>
+
+@if (ShowPaycheckForm)
+{
+    <section class="panel form-panel paycheck-panel">
+        <div class="panel-head"><h2>Log a paycheck</h2><button class="icon-button" @onclick="() => ShowPaycheckForm = false">×</button></div>
+        <div class="form-grid">
+            <label>Whose paycheck?<select @bind="PaycheckOwner"><option>Me</option><option>Jess</option></select></label>
+            <label>Amount<input type="number" step=".01" @bind="PaycheckAmount" /></label>
+            <label>Date<input type="date" @bind="PaycheckDate" /></label>
+        </div>
+        <button class="button primary" disabled="@(PaycheckAmount <= 0)" @onclick="LogPaycheck">Log it — updates income right away</button>
+    </section>
+}
 
 <details class="jess-surprise">
     <summary><span class="love-heart">♥</span><div><small>HEY JESS…</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
@@ -125,4 +139,25 @@
         finally { IsUploading = false; }
     }
     async Task DeleteUpload(Guid id) => await Store.DeleteUploadAsync(id);
+
+    bool ShowPaycheckForm;
+    string PaycheckOwner = "Me";
+    decimal PaycheckAmount;
+    DateTime PaycheckDate = DateTime.Today;
+    async Task LogPaycheck()
+    {
+        Store.Data.Transactions.Add(new()
+        {
+            Description = $"{PaycheckOwner} paycheck",
+            Category = "Income",
+            Owner = PaycheckOwner,
+            Amount = PaycheckAmount,
+            IsIncome = true,
+            Date = PaycheckDate
+        });
+        await Store.SaveAsync();
+        PaycheckAmount = 0;
+        PaycheckDate = DateTime.Today;
+        ShowPaycheckForm = false;
+    }
 }
