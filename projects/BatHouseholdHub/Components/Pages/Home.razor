@@ -5,15 +5,10 @@
 
 <section class="hero">
     <div class="hero-blob" aria-hidden="true"></div>
-    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1>Hey, you two. <em>You're doing great.</em></h1><p>Here’s the gentle little snapshot of home today.</p></div>
+    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1 class="hashtag-hero">#GoodJobTreyAndJess</h1><p>Here’s the gentle little snapshot of home today.</p></div>
     <div class="hero-side">
         <a class="button primary" href="finances#add">＋ Add transaction</a>
-        <svg class="organic-sticker" viewBox="0 0 160 130" aria-hidden="true">
-            <path id="arcPath" d="M 14 88 A 66 66 0 0 1 146 88" fill="none" />
-            <text text-anchor="middle">
-                <textPath href="#arcPath" startOffset="50%" text-anchor="middle">ORGANIC</textPath>
-            </text>
-        </svg>
+        <span class="organic-sticker" aria-hidden="true">ORGANIC</span>
     </div>
 </section>
 
@@ -53,7 +48,7 @@
 </section>
 
 @code {
-    static readonly string[] CatFaces = ["🦇", "🐾", "💜", "🌙", "💎"];
+    static readonly string[] CatFaces = ["🐱", "🐈‍⬛", "🦇", "🐾", "💎"];
     static readonly string[] Vibes =
     [
         "Sip the orange juice, water the plants, patrol the block. That's the whole morning.",
