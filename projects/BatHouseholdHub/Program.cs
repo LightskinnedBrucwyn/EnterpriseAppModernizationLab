@@ -12,6 +12,7 @@ Directory.CreateDirectory(dataFolder);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 builder.Services.AddSingleton<HouseholdStore>();
+builder.Services.AddHostedService<RecurringTransactionService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataFolder, "keys")))
     .SetApplicationName("BatHouseholdHub");

@@ -11,10 +11,12 @@ public class HouseholdStore
 {
     private readonly string _path;
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly ILogger<HouseholdStore> _logger;
     public HouseholdData Data { get; private set; }
 
-    public HouseholdStore(IWebHostEnvironment environment)
+    public HouseholdStore(IWebHostEnvironment environment, ILogger<HouseholdStore> logger)
     {
+        _logger = logger;
         var folder = Path.Combine(environment.ContentRootPath, "App_Data");
         Directory.CreateDirectory(folder);
         _path = Path.Combine(folder, "household.json");
@@ -27,9 +29,29 @@ public class HouseholdStore
 
     private HouseholdData Load()
     {
-        if (File.Exists(_path))
+        if (!File.Exists(_path)) return Seed();
+        try
+        {
             return JsonSerializer.Deserialize<HouseholdData>(File.ReadAllText(_path)) ?? Seed();
-        return Seed();
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "household.json is corrupted; backing it up and starting fresh");
+            var backupPath = $"{_path}.corrupt-{DateTime.Now:yyyyMMddHHmmss}.json";
+            File.Copy(_path, backupPath, overwrite: true);
+            return Seed();
+        }
+    }
+
+    /// <summary>Re-checks recurring transactions; call periodically so bills due later in the
+    /// month still post if the app keeps running across the month boundary.</summary>
+    public async Task CheckRecurringAsync()
+    {
+        await _lock.WaitAsync();
+        bool changed;
+        try { changed = ProcessRecurringTransactions(); }
+        finally { _lock.Release(); }
+        if (changed) await SaveAsync();
     }
 
     public async Task SaveAsync()
