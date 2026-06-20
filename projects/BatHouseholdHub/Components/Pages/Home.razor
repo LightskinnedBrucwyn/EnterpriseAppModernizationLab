@@ -13,6 +13,12 @@
     <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
 </details>
 
+<section class="cat-corner">
+    <span class="cat-face">@CatFace</span>
+    <div><span class="kicker">VIBES CORNER, COURTESY OF THE CATS</span><blockquote>“@Quote”</blockquote><cite>— inspired by Larry June energy</cite></div>
+    <button class="button primary" @onclick="ShuffleVibes">🐾 New vibe</button>
+</section>
+
 <section class="stat-grid">
     <div class="stat-card sage"><span>Left this month</span><strong>@Remaining.ToString("C0")</strong><small>@Income.ToString("C0") income · @Spending.ToString("C0") spent</small></div>
     <div class="stat-card peach"><span>Next card due</span><strong>@NextDue</strong><small>@(Store.Data.CreditAccounts.FirstOrDefault()?.Name ?? "Add a credit card")</small></div>
@@ -37,6 +43,24 @@
 </section>
 
 @code {
+    static readonly string[] CatFaces = ["🐱", "🐈", "🐈‍⬛", "😼", "🙀➡️😻"];
+    static readonly string[] Vibes =
+    [
+        "Sip the orange juice, water the plants, let the bread proof. That's the whole morning.",
+        "Organic everything, even the vibes. Stay rooted, stay easy.",
+        "Real estate in your mind too — keep that space clean and paid off.",
+        "Slow cook the rice, slow cook the plan. Good things don't rush.",
+        "Fresh air, fresh produce, fresh start. Repeat tomorrow.",
+        "Stack the small wins like groceries — one bag at a time, no rush.",
+        "Cats nap in the sun for a reason. Take the nap.",
+        "Keep the budget warm and the kitchen warmer.",
+        "Every cozy house started with someone choosing calm over chaos.",
+        "Drink water, check the savings goal, pet the cat. In that order."
+    ];
+    string CatFace = CatFaces[0];
+    string Quote = Vibes[0];
+    void ShuffleVibes() { CatFace = CatFaces[Random.Shared.Next(CatFaces.Length)]; Quote = Vibes[Random.Shared.Next(Vibes.Length)]; }
+    protected override void OnInitialized() => ShuffleVibes();
     decimal Income => Store.Data.Transactions.Where(x => x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
     decimal Spending => Store.Data.Transactions.Where(x => !x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
     decimal Remaining => Income - Spending;
