@@ -1,22 +1,22 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,600;9..144,700&display=swap');
 
 :root{
-    --ink:#241b34;--muted:#74708c;--cream:#f3eef9;--paper:#fffdfb;
-    --sage:#e7e1f7;--deep:#4d3a82;--peach:#f3e3e9;--butter:#f6ecd3;--lilac:#e6dafb;
-    --line:#e6e0f0;--shadow:0 12px 35px rgba(40,25,70,.10);
-    --organic:#caa24a;--organic-deep:#96762a;--organic-soft:#f3e6c4;
-    --signal-glow:rgba(202,162,74,.35);--wallpaper-sky-1:#efe9fb;--wallpaper-sky-2:#f6f1fb;
-    --sidebar-bg:#1c1530;--sidebar-bg-2:#2a1f47;--sidebar-fg:#f1ecfb;--sidebar-muted:#b7a9da;
-    --gold:#caa24a;--violet:#6b4fb6;--noir:#15101f;
+    --ink:#26352d;--muted:#718077;--cream:#f8f4eb;--paper:#fffdf8;
+    --sage:#dce9d8;--deep:#46624f;--peach:#f4ded1;--butter:#f3eac6;--lilac:#e9e0ef;
+    --line:#e8e1d6;--shadow:0 12px 35px rgba(57,70,58,.08);
+    --organic:#d97a3f;--organic-deep:#b4582a;--organic-soft:#f6e3cc;
+    --signal-glow:rgba(0,0,0,0);--wallpaper-sky-1:var(--cream);--wallpaper-sky-2:var(--cream);
+    --sidebar-bg:#30483a;--sidebar-bg-2:#3d5747;--sidebar-fg:#f8f4eb;--sidebar-muted:#aebdaf;
+    --gold:#d97a3f;--violet:#46624f;--noir:#1c2a22;
 }
 [data-theme="dark"]{
-    --ink:#ece6fb;--muted:#a89bc9;--cream:#100a1c;--paper:#1a1330;
-    --sage:#2a2147;--deep:#caa24a;--peach:#33203a;--butter:#352a1a;--lilac:#28204a;
-    --line:#332958;--shadow:0 18px 45px rgba(0,0,0,.55);
-    --organic:#e8bd5e;--organic-deep:#caa24a;--organic-soft:#3a2c18;
-    --signal-glow:rgba(232,189,94,.25);--wallpaper-sky-1:#0c081a;--wallpaper-sky-2:#1c1233;
-    --sidebar-bg:#0c0815;--sidebar-bg-2:#191130;--sidebar-fg:#f1ecfb;--sidebar-muted:#9485b8;
-    --gold:#e8bd5e;--violet:#8a68e0;--noir:#0a0712;
+    --ink:#e7e6ee;--muted:#9095a3;--cream:#0c0e12;--paper:#15181d;
+    --sage:#1d2228;--deep:#c79a3f;--peach:#241a17;--butter:#241f12;--lilac:#1b1d24;
+    --line:#272b32;--shadow:0 18px 45px rgba(0,0,0,.6);
+    --organic:#c79a3f;--organic-deep:#a07a2c;--organic-soft:#2a2316;
+    --signal-glow:rgba(199,154,63,.22);--wallpaper-sky-1:#07080a;--wallpaper-sky-2:#15181d;
+    --sidebar-bg:#070809;--sidebar-bg-2:#14171c;--sidebar-fg:#e7e6ee;--sidebar-muted:#7c828f;
+    --gold:#c79a3f;--violet:#3a3f49;--noir:#05060a;
 }
 *{box-sizing:border-box}
 html,body{margin:0;color:var(--ink);font-family:'DM Sans',sans-serif;transition:background-color .25s ease,color .25s ease}

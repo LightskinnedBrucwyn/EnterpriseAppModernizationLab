@@ -1,6 +1,11 @@
+using System.Globalization;
 using BatHouseholdHub.Components;
 using BatHouseholdHub.Services;
 using Microsoft.AspNetCore.DataProtection;
+
+var usCulture = new CultureInfo("en-US");
+CultureInfo.DefaultThreadCurrentCulture = usCulture;
+CultureInfo.DefaultThreadCurrentUICulture = usCulture;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Logging.ClearProviders();
