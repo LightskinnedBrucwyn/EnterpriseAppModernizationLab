@@ -1,31 +1,36 @@
 @page "/credit"
 @inject HouseholdStore Store
 
-<PageTitle>Credit — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">CLEAR, NOT SCARY</span><h1>Credit center</h1><p>Keep an eye on balances, due dates, and utilization—without storing card numbers.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add account</button></section>
+<PageTitle>Bills — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">STEADY MONTHLY BILLS</span><h1>Car notes, rent &amp; the big stuff</h1><p>Track the recurring bills that actually matter to us — rent, car notes, anything with a due date.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add bill</button></section>
 
 @if (ShowForm)
 {
-    <section class="panel form-panel"><div class="panel-head"><h2>Add a credit account</h2></div><div class="form-grid">
-        <label>Nickname<input @bind="Draft.Name" placeholder="Everyday card" /></label><label>Last four<input maxlength="4" @bind="Draft.LastFour" /></label>
-        <label>Balance<input type="number" step=".01" @bind="Draft.Balance" /></label><label>Credit limit<input type="number" step=".01" @bind="Draft.Limit" /></label>
-        <label>APR %<input type="number" step=".01" @bind="Draft.Apr" /></label><label>Payment due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
-    </div><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="AddAccount">Save account</button></section>
+    <section class="panel form-panel"><div class="panel-head"><h2>Add a bill</h2></div><div class="form-grid">
+        <label>Bill name<input @bind="Draft.Name" placeholder="Rent, car note, mortgage…" /></label>
+        <label>Amount per month<input type="number" step=".01" @bind="Draft.Balance" /></label>
+        <label>Original loan amount (optional)<input type="number" step=".01" @bind="Draft.Limit" placeholder="Leave 0 if not a loan" /></label>
+        <label>Payment due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+    </div><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="AddAccount">Save bill</button></section>
 }
 
 <section class="card-grid">
 @foreach (var card in Store.Data.CreditAccounts)
 {
-    var percent = card.Limit == 0 ? 0 : Math.Min(100, card.Balance / card.Limit * 100);
+    var hasLoanAmount = card.Limit > 0;
+    var percent = hasLoanAmount ? Math.Min(100, card.Balance / card.Limit * 100) : 0;
     <article class="credit-card panel">
-        <div class="panel-head"><div><span class="kicker">•••• @card.LastFour</span><h2>@card.Name</h2></div><button class="delete-button" @onclick="() => Delete(card)">×</button></div>
-        <div class="goal-amount"><strong>@card.Balance.ToString("C")</strong><span>of @card.Limit.ToString("C")</span></div>
-        <div class="progress"><i class="@(percent > 30 ? "warning" : "")" style="width:@percent%"></i></div>
-        <div class="credit-meta"><span><small>UTILIZATION</small><b>@percent.ToString("0")%</b></span><span><small>APR</small><b>@card.Apr%</b></span><span><small>DUE</small><b>Day @card.DueDay</b></span></div>
+        <div class="panel-head"><div><h2>@card.Name</h2></div><button class="delete-button" @onclick="() => Delete(card)">×</button></div>
+        <div class="goal-amount"><strong>@card.Balance.ToString("C")</strong><span>@(hasLoanAmount ? $"of {card.Limit:C} original" : "per month")</span></div>
+        @if (hasLoanAmount)
+        {
+            <div class="progress"><i style="width:@percent%"></i></div>
+        }
+        <div class="credit-meta"><span><small>DUE</small><b>Day @card.DueDay</b></span></div>
     </article>
 }
 </section>
-<aside class="privacy-note">🔒 Only nicknames and optional last-four digits are stored. Never enter a full card number or bank password.</aside>
+<aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
 
 @code {
     CreditAccount Draft = new(); bool ShowForm;

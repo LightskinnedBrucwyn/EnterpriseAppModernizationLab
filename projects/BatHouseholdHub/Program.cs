@@ -40,4 +40,11 @@ app.UseAntiforgery();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+app.MapGet("/uploads/{id:guid}", (Guid id, HouseholdStore store) =>
+{
+    var record = store.Data.UploadedFiles.FirstOrDefault(x => x.Id == id);
+    if (record is null || !File.Exists(store.UploadPath(id))) return Results.NotFound();
+    return Results.File(store.UploadPath(id), record.ContentType, record.FileName);
+});
+
 app.Run();

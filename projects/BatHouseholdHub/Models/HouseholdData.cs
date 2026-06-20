@@ -10,6 +10,17 @@ public class HouseholdData
     public List<SavingsGoal> SavingsGoals { get; set; } = [];
     public List<RecurringTransaction> RecurringTransactions { get; set; } = [];
     public List<PurchaseIdea> PurchaseIdeas { get; set; } = [];
+    public List<UploadedFile> UploadedFiles { get; set; } = [];
+}
+
+public class UploadedFile
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string FileName { get; set; } = "";
+    public string ContentType { get; set; } = "application/octet-stream";
+    public string Note { get; set; } = "";
+    public long SizeBytes { get; set; }
+    public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Transaction

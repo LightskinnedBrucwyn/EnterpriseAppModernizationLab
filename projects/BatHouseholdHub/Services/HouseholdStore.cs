@@ -10,6 +10,7 @@ namespace BatHouseholdHub.Services;
 public class HouseholdStore
 {
     private readonly string _path;
+    private readonly string _uploadsFolder;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<HouseholdStore> _logger;
     public HouseholdData Data { get; private set; }
@@ -19,6 +20,8 @@ public class HouseholdStore
         _logger = logger;
         var folder = Path.Combine(environment.ContentRootPath, "App_Data");
         Directory.CreateDirectory(folder);
+        _uploadsFolder = Path.Combine(folder, "uploads");
+        Directory.CreateDirectory(_uploadsFolder);
         _path = Path.Combine(folder, "household.json");
         Data = Load();
         var changed = EnsureStarterRecipes();
@@ -53,6 +56,28 @@ public class HouseholdStore
         finally { _lock.Release(); }
         if (changed) await SaveAsync();
     }
+
+    public async Task<UploadedFile> SaveUploadAsync(Stream content, string fileName, string contentType, string note)
+    {
+        var record = new UploadedFile { FileName = fileName, ContentType = contentType, Note = note };
+        await using var file = File.Create(UploadPath(record.Id));
+        await content.CopyToAsync(file);
+        record.SizeBytes = file.Length;
+        Data.UploadedFiles.Add(record);
+        await SaveAsync();
+        return record;
+    }
+
+    public async Task DeleteUploadAsync(Guid id)
+    {
+        var record = Data.UploadedFiles.FirstOrDefault(x => x.Id == id);
+        if (record is null) return;
+        Data.UploadedFiles.Remove(record);
+        File.Delete(UploadPath(id));
+        await SaveAsync();
+    }
+
+    public string UploadPath(Guid id) => Path.Combine(_uploadsFolder, id.ToString("N"));
 
     public async Task SaveAsync()
     {
@@ -178,26 +203,17 @@ public class HouseholdStore
         return changed;
     }
 
+    /// <summary>No financial placeholder data — real households start empty and fill in
+    /// transactions (manually or via Rocket Money import), bills, and goals themselves.
+    /// Starter recipes are kept since they're genuinely reusable content, not fake numbers.</summary>
     private static HouseholdData Seed() => new()
     {
-        Transactions =
-        [
-            new() { Description = "Paycheck", Category = "Income", Owner = "Me", Amount = 3200, IsIncome = true, Date = DateTime.Today.AddDays(-8), Source = "Starter" },
-            new() { Description = "Jess paycheck", Category = "Income", Owner = "Jess", Amount = 2850, IsIncome = true, Date = DateTime.Today.AddDays(-6), Source = "Starter" },
-            new() { Description = "Groceries", Category = "Groceries", Owner = "Shared", Amount = 146.32m, Date = DateTime.Today.AddDays(-2), Source = "Starter" },
-            new() { Description = "Internet", Category = "Bills", Owner = "Shared", Amount = 79.99m, Date = DateTime.Today.AddDays(-4), Source = "Starter" }
-        ],
-        SavingsGoals = [new() { Name = "Emergency cushion", Current = 2400, Target = 6000 }],
-        CreditAccounts = [new() { Name = "Everyday Card", LastFour = "4242", Balance = 640, Limit = 5000, Apr = 19.99m, DueDay = 18 }],
         Recipes =
         [
             new() { Name = "Cozy taco bowls", Category = "Dinner", Minutes = 30, Ingredients = "Rice\nBlack beans\nGround turkey\nSalsa\nAvocado", Instructions = "Cook rice and turkey. Warm beans. Build bowls and add toppings." },
             new() { Name = "Sheet-pan chicken", Category = "Dinner", Minutes = 40, Ingredients = "Chicken thighs\nBaby potatoes\nBroccoli\nLemon", Instructions = "Season everything and roast at 425°F until golden." },
             new() { Name = "Pesto pasta night", Category = "Dinner", Minutes = 20, Ingredients = "Pasta\nPesto\nCherry tomatoes\nParmesan", Instructions = "Boil pasta, toss with pesto, tomatoes, and parmesan." },
             new() { Name = "Breakfast-for-dinner", Category = "Dinner", Minutes = 25, Ingredients = "Eggs\nBread\nBreakfast potatoes\nFruit", Instructions = "Make eggs, toast, and crispy potatoes. Serve with fruit." }
-        ],
-        Groceries = [new() { Name = "Coffee", Section = "Pantry" }, new() { Name = "Spinach", Section = "Produce" }],
-        MealPlans = [new() { Date = DateTime.Today, Meal = "Cozy taco bowls" }],
-        RecurringTransactions = [new() { Description = "Internet", Category = "Bills", Owner = "Shared", Amount = 79.99m, DayOfMonth = 15 }]
+        ]
     };
 }
