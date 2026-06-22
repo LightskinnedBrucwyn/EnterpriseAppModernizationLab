@@ -44,23 +44,24 @@ public class HomeButlerService(HttpClient http, HouseholdStore store, ILogger<Ho
 
         try
         {
-            var prompt = $"""
-            Product URL:
-            {url}
-
-            Page excerpt:
-            {pageExcerpt}
-
-            Extract the product name, price in USD as a number, and image URL if available.
-
-            Reply with ONLY valid JSON in this exact shape:
-            {{"name":"","price":0,"imageUrl":""}}
-
-            Rules:
-            - Do not include markdown.
-            - Do not explain.
-            - If unknown, use an empty string or 0.
-            """;
+            var prompt = string.Join("\n", new[]
+            {
+                "Product URL:",
+                url,
+                "",
+                "Page excerpt:",
+                pageExcerpt,
+                "",
+                "Extract the product name, price in USD as a number, and image URL if available.",
+                "",
+                "Reply with ONLY valid JSON in this exact shape:",
+                "{\"name\":\"\",\"price\":0,\"imageUrl\":\"\"}",
+                "",
+                "Rules:",
+                "- Do not include markdown.",
+                "- Do not explain.",
+                "- If unknown, use an empty string or 0."
+            });
 
             var requestBody = new
             {
