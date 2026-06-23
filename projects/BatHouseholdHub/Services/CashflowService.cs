@@ -47,7 +47,9 @@ public class CashflowService(HouseholdStore store)
         var pending = activeBills.Where(x => x.EffectiveStatus(today) == BillStatus.Pending).ToList();
         var paid = activeBills.Where(x => x.EffectiveStatus(today) == BillStatus.Paid).ToList();
 
-        var upcomingBeforePaycheck = unpaid.Where(x => NextDueDate(x) <= horizon).Sum(x => x.Amount);
+        // Pending bills are already counted in PendingPayments — exclude them here so a bill
+        // due before the next paycheck doesn't get subtracted from the formula twice.
+        var upcomingBeforePaycheck = unpaid.Where(x => x.EffectiveStatus(today) != BillStatus.Pending && NextDueDate(x) <= horizon).Sum(x => x.Amount);
         var pendingTotal = pending.Sum(x => x.Amount);
 
         var expectedIncome = data.IncomeEvents
