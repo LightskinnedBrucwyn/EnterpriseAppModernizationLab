@@ -27,6 +27,7 @@ public class HouseholdStore
         var changed = EnsureStarterRecipes();
         changed |= EnsureKnownBills();
         changed |= EnsureKnownIncomeSources();
+        changed |= LinkDelayedBillsToIncome();
         changed |= ProcessRecurringTransactions();
         if (changed)
             File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
@@ -159,17 +160,57 @@ public class HouseholdStore
             Data.RecurringTransactions.RemoveAll(x => x.Description == "Internet" && x.Amount == 79.99m && x.DayOfMonth == 15);
         }
         var existing = Data.Transactions.Where(x => !string.IsNullOrWhiteSpace(x.SourceKey)).Select(x => x.SourceKey).ToHashSet();
+        var newlyImported = new List<Transaction>();
         foreach (var transaction in parsed)
         {
             if (!existing.Add(transaction.SourceKey)) { result.SkippedDuplicates++; continue; }
             Data.Transactions.Add(transaction);
+            newlyImported.Add(transaction);
             result.Imported++;
         }
+        ReconcileImportedTransactions(newlyImported);
         result.AccountCount = accounts.Count;
         result.EarliestDate = parsed.Count == 0 ? null : parsed.Min(x => x.Date);
         result.LatestDate = parsed.Count == 0 ? null : parsed.Max(x => x.Date);
         await SaveAsync();
         return result;
+    }
+
+    private static string NormalizeName(string text) => new string(text.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+
+    /// <summary>Matches freshly imported transactions against planned bills and pending
+    /// payments by name and amount. A clean match marks the bill Paid; a transaction that
+    /// looks like a bill payment but can't be confidently matched is flagged Needs Review
+    /// instead of silently being treated as ordinary spending.</summary>
+    private void ReconcileImportedTransactions(List<Transaction> imported)
+    {
+        foreach (var transaction in imported.Where(x => !x.IsIncome))
+        {
+            var description = NormalizeName(transaction.Description);
+            if (description.Length == 0) continue;
+
+            var nameMatches = Data.Bills
+                .Where(b => b.IsActive && b.EffectiveStatus(transaction.Date) is BillStatus.Upcoming or BillStatus.Pending)
+                .Where(b => { var name = NormalizeName(b.Name); return name.Length > 0 && (description.Contains(name) || name.Contains(description)); })
+                .ToList();
+            if (nameMatches.Count == 0) continue;
+
+            var amountMatch = nameMatches
+                .Where(b => b.Amount == 0 || Math.Abs(b.Amount - transaction.Amount) <= Math.Max(1m, b.Amount * 0.05m))
+                .OrderBy(b => Math.Abs(b.Amount - transaction.Amount))
+                .FirstOrDefault();
+
+            if (amountMatch is not null)
+            {
+                amountMatch.LastPaidDate = transaction.Date;
+                amountMatch.ManualStatus = BillStatus.Upcoming;
+                transaction.MatchedBillId = amountMatch.Id;
+            }
+            else
+            {
+                transaction.NeedsReview = true;
+            }
+        }
     }
 
     /// <summary>The household's real-world bill list, organized the way Trey actually thinks
@@ -198,10 +239,18 @@ public class HouseholdStore
         ("Claude", BillCategory.FixedBill, 21.32m, 27, BillFrequency.Monthly, BillPriority.Subscription, ""),
         ("Amazon Prime", BillCategory.FixedBill, 16.23m, 22, BillFrequency.Monthly, BillPriority.Subscription, "Prime Video Channels adds another ~$14.06 on a separate charge."),
         ("City of Davenport", BillCategory.FixedBill, 40m, 3, BillFrequency.Monthly, BillPriority.Critical, ""),
-        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "No matching transactions found — confirm with Trey."),
+        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Rent money moved aside ahead of the due date — treated as reserved, not spendable."),
         ("Apple Cash transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
-        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill.")
+        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
+        ("Ahmad", BillCategory.FixedBill, 600m, 1, BillFrequency.Monthly, BillPriority.Critical, "Rent owed to Ahmad — delayed until the Vista final check arrives.")
     ];
+
+    private static MoneyType DefaultMoneyType(BillCategory category) => category switch
+    {
+        BillCategory.DebtPayment => MoneyType.DebtPayment,
+        BillCategory.TransferSavings => MoneyType.Transfer,
+        _ => MoneyType.Expense
+    };
 
     private bool EnsureKnownBills()
     {
@@ -211,11 +260,16 @@ public class HouseholdStore
             var existing = Data.Bills.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existing is null)
             {
-                Data.Bills.Add(new Bill
+                var bill = new Bill
                 {
                     Name = name, Category = category, Amount = amount, DueDay = dueDay,
-                    Frequency = frequency, Priority = priority, Notes = notes
-                });
+                    Frequency = frequency, Priority = priority, Notes = notes, MoneyType = DefaultMoneyType(category)
+                };
+                // The rent transfer is money already set aside, not spendable; Ahmad's rent
+                // waits on income rather than a due date — see the real-life example in the brief.
+                if (name == "SoFi transfer") { bill.ManualStatus = BillStatus.Reserved; bill.MoneyType = MoneyType.RentReserve; }
+                if (name == "Ahmad") bill.ManualStatus = BillStatus.Delayed;
+                Data.Bills.Add(bill);
                 changed = true;
                 continue;
             }
@@ -230,6 +284,19 @@ public class HouseholdStore
             }
         }
         return changed;
+    }
+
+    /// <summary>Links Ahmad's delayed rent payment to the Vista final check income event so the
+    /// dashboard knows which paycheck unblocks it. Only sets the link if it isn't already set,
+    /// so re-linking never clobbers a household's own choice.</summary>
+    private bool LinkDelayedBillsToIncome()
+    {
+        var ahmad = Data.Bills.FirstOrDefault(x => x.Name.Equals("Ahmad", StringComparison.OrdinalIgnoreCase));
+        if (ahmad is null || ahmad.LinkedIncomeEventId is not null) return false;
+        var vista = Data.IncomeEvents.FirstOrDefault(x => x.Source.Equals("Vista final check", StringComparison.OrdinalIgnoreCase));
+        if (vista is null) return false;
+        ahmad.LinkedIncomeEventId = vista.Id;
+        return true;
     }
 
     /// <summary>Marks a bill paid for the current cycle and logs the real expense so income
@@ -262,6 +329,39 @@ public class HouseholdStore
         var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
         if (bill is null) return;
         bill.ManualStatus = bill.ManualStatus == BillStatus.Pending ? BillStatus.Upcoming : BillStatus.Pending;
+        await SaveAsync();
+    }
+
+    /// <summary>Sets a bill's status directly — used for Reserve, Delay (with an optional linked
+    /// income event), Skip, and reverting back to Upcoming from the bill row's status menu.</summary>
+    public async Task SetBillStatusAsync(Guid id, BillStatus status, Guid? linkedIncomeEventId = null)
+    {
+        var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
+        if (bill is null) return;
+        bill.ManualStatus = status;
+        bill.LinkedIncomeEventId = status == BillStatus.Delayed ? linkedIncomeEventId : null;
+        await SaveAsync();
+    }
+
+    public async Task MarkTransactionReviewedAsync(Guid transactionId)
+    {
+        var transaction = Data.Transactions.FirstOrDefault(x => x.Id == transactionId);
+        if (transaction is null) return;
+        transaction.NeedsReview = false;
+        await SaveAsync();
+    }
+
+    /// <summary>Manually links a Needs Review transaction to a bill and marks that bill paid —
+    /// for the cases the automatic Rocket Money matching pass couldn't resolve on its own.</summary>
+    public async Task LinkTransactionToBillAsync(Guid transactionId, Guid billId)
+    {
+        var transaction = Data.Transactions.FirstOrDefault(x => x.Id == transactionId);
+        var bill = Data.Bills.FirstOrDefault(x => x.Id == billId);
+        if (transaction is null || bill is null) return;
+        transaction.NeedsReview = false;
+        transaction.MatchedBillId = bill.Id;
+        bill.LastPaidDate = transaction.Date;
+        bill.ManualStatus = BillStatus.Upcoming;
         await SaveAsync();
     }
 

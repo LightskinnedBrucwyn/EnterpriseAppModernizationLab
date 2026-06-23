@@ -50,6 +50,12 @@ public class Transaction
     public string Institution { get; set; } = "";
     public string Source { get; set; } = "Manual";
     public string SourceKey { get; set; } = "";
+    public MoneyType MoneyType { get; set; } = MoneyType.Expense;
+    /// <summary>Set when an import reconciliation pass matches this transaction to a planned
+    /// bill (and marks that bill Paid). Left null when the transaction couldn't be matched,
+    /// in which case NeedsReview is set instead.</summary>
+    public Guid? MatchedBillId { get; set; }
+    public bool NeedsReview { get; set; }
 }
 
 public class RocketImportResult
@@ -79,7 +85,8 @@ public class RecurringTransaction
 public enum BillCategory { DebtPayment, FixedBill, TransferSavings }
 public enum BillFrequency { Monthly, Weekly, Biweekly, Quarterly, Yearly }
 public enum BillPriority { Critical, Debt, Subscription, Optional }
-public enum BillStatus { Upcoming, Pending, Paid, NeedsReview }
+public enum BillStatus { Upcoming, Pending, Paid, Reserved, Delayed, NeedsReview, Skipped }
+public enum MoneyType { Cash, Income, Expense, Transfer, RentReserve, DebtPayment, SavingsMove }
 
 public class Bill
 {
@@ -97,6 +104,10 @@ public class Bill
     public bool IsActive { get; set; } = true;
     public DateTime? LastPaidDate { get; set; }
     public BillStatus ManualStatus { get; set; } = BillStatus.Upcoming;
+    public MoneyType MoneyType { get; set; } = MoneyType.Expense;
+    /// <summary>When ManualStatus is Delayed, the bill waits on this income event instead of
+    /// a due date — e.g. "Pay Ahmad $600 after Vista final check arrives."</summary>
+    public Guid? LinkedIncomeEventId { get; set; }
 
     public bool IsPaidThisCycle(DateTime asOf) => LastPaidDate is { } d && d.Year == asOf.Year && d.Month == asOf.Month;
     public BillStatus EffectiveStatus(DateTime asOf) => IsPaidThisCycle(asOf) ? BillStatus.Paid : ManualStatus;
@@ -216,7 +227,10 @@ public static class BillStatusExtensions
     {
         BillStatus.Pending => "Pending",
         BillStatus.Paid => "Paid",
+        BillStatus.Reserved => "Reserved",
+        BillStatus.Delayed => "Delayed",
         BillStatus.NeedsReview => "Needs review",
+        BillStatus.Skipped => "Skipped",
         _ => "Upcoming"
     };
 
@@ -224,8 +238,25 @@ public static class BillStatusExtensions
     {
         BillStatus.Pending => "status-pending",
         BillStatus.Paid => "status-paid",
+        BillStatus.Reserved => "status-reserved",
+        BillStatus.Delayed => "status-delayed",
         BillStatus.NeedsReview => "status-review",
+        BillStatus.Skipped => "status-skipped",
         _ => "status-upcoming"
+    };
+}
+
+public static class MoneyTypeExtensions
+{
+    public static string Label(this MoneyType type) => type switch
+    {
+        MoneyType.Cash => "Cash",
+        MoneyType.Income => "Income",
+        MoneyType.Transfer => "Transfer",
+        MoneyType.RentReserve => "Rent Reserve",
+        MoneyType.DebtPayment => "Debt Payment",
+        MoneyType.SavingsMove => "Savings Move",
+        _ => "Expense"
     };
 }
 

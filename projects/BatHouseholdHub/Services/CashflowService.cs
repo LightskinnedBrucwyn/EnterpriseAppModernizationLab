@@ -2,12 +2,19 @@ using BatHouseholdHub.Models;
 
 namespace BatHouseholdHub.Services;
 
+public enum CashflowWindow { UntilNextPaycheck, ThisMonth, Next30Days, Custom }
+
 public class CashflowSummary
 {
+    public DateTime SelectedDate { get; set; }
     public decimal CurrentFunds { get; set; }
     public decimal PendingPayments { get; set; }
-    public decimal UpcomingBillsBeforeNextPaycheck { get; set; }
-    public decimal ExpectedIncomeBeforeNextPaycheck { get; set; }
+    public decimal ReservedMoney { get; set; }
+    public decimal UpcomingBillsBeforeSelectedDate { get; set; }
+    public decimal RequiredDebtPaymentsBeforeSelectedDate { get; set; }
+    public decimal ExpectedIncomeBeforeSelectedDate { get; set; }
+    public decimal AvailableBeforeIncome { get; set; }
+    public decimal AvailableAfterIncome { get; set; }
     public decimal AmountLeftAfterBills { get; set; }
     public decimal BufferAmount { get; set; }
     public decimal AmountLeftAfterBuffer { get; set; }
@@ -17,13 +24,18 @@ public class CashflowSummary
     public List<Bill> UnpaidBills { get; set; } = [];
     public List<Bill> PaidBills { get; set; } = [];
     public List<Bill> PendingBills { get; set; } = [];
+    public List<Bill> ReservedBills { get; set; } = [];
+    /// <summary>Delayed bills still waiting on their linked income event to arrive.</summary>
+    public List<Bill> DelayedBills { get; set; } = [];
+    public List<Transaction> NeedsReviewTransactions { get; set; } = [];
 }
 
 /// <summary>Turns funds, bills, and income events into the plain-language numbers shown
-/// on the Bills page: what's available, what's due, and what's left after covering it.</summary>
+/// on the Bills page: what's available, what's due, what's set aside, and what's left after
+/// covering it — for whichever date window the household is looking at.</summary>
 public class CashflowService(HouseholdStore store)
 {
-    public CashflowSummary BuildSummary(DateTime? asOf = null)
+    public CashflowSummary BuildSummary(CashflowWindow window = CashflowWindow.UntilNextPaycheck, DateTime? customDate = null, DateTime? asOf = null)
     {
         var today = (asOf ?? DateTime.Today).Date;
         var data = store.Data;
@@ -33,7 +45,14 @@ public class CashflowService(HouseholdStore store)
             .Where(x => x.Status != IncomeStatus.Received && x.ExpectedDate.Date >= today)
             .OrderBy(x => x.ExpectedDate)
             .FirstOrDefault();
-        var horizon = nextPaycheck?.ExpectedDate.Date ?? today.AddDays(14);
+
+        var selectedDate = window switch
+        {
+            CashflowWindow.ThisMonth => new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month)),
+            CashflowWindow.Next30Days => today.AddDays(30),
+            CashflowWindow.Custom => (customDate ?? today).Date,
+            _ => nextPaycheck?.ExpectedDate.Date ?? today.AddDays(14)
+        };
 
         int DueDayThisCycle(Bill bill) => Math.Min(bill.DueDay, DateTime.DaysInMonth(today.Year, today.Month));
         DateTime NextDueDate(Bill bill)
@@ -43,33 +62,59 @@ public class CashflowService(HouseholdStore store)
             return dueThisMonth >= today ? dueThisMonth : dueThisMonth.AddMonths(1);
         }
 
-        var unpaid = activeBills.Where(x => x.EffectiveStatus(today) != BillStatus.Paid).ToList();
-        var pending = activeBills.Where(x => x.EffectiveStatus(today) == BillStatus.Pending).ToList();
-        var paid = activeBills.Where(x => x.EffectiveStatus(today) == BillStatus.Paid).ToList();
+        bool IsBlockedByIncome(Bill bill)
+        {
+            if (bill.ManualStatus != BillStatus.Delayed) return false;
+            if (bill.LinkedIncomeEventId is not { } incomeId) return true;
+            var linked = data.IncomeEvents.FirstOrDefault(x => x.Id == incomeId);
+            return linked is null || linked.Status != IncomeStatus.Received;
+        }
 
-        // Pending bills are already counted in PendingPayments — exclude them here so a bill
-        // due before the next paycheck doesn't get subtracted from the formula twice.
-        var upcomingBeforePaycheck = unpaid.Where(x => x.EffectiveStatus(today) != BillStatus.Pending && NextDueDate(x) <= horizon).Sum(x => x.Amount);
+        var unpaid = activeBills.Where(x => x.EffectiveStatus(today) != BillStatus.Paid).ToList();
+        var paid = activeBills.Where(x => x.EffectiveStatus(today) == BillStatus.Paid).ToList();
+        var reserved = unpaid.Where(x => x.EffectiveStatus(today) == BillStatus.Reserved).ToList();
+        var skipped = unpaid.Where(x => x.EffectiveStatus(today) == BillStatus.Skipped).ToList();
+        var delayedBlocked = unpaid.Where(x => x.EffectiveStatus(today) == BillStatus.Delayed && IsBlockedByIncome(x)).ToList();
+        // Delayed bills whose linked income has arrived are payable now, same as Pending.
+        var delayedUnblocked = unpaid.Where(x => x.EffectiveStatus(today) == BillStatus.Delayed && !IsBlockedByIncome(x)).ToList();
+        var pending = unpaid.Where(x => x.EffectiveStatus(today) == BillStatus.Pending).Concat(delayedUnblocked).ToList();
+
+        var excludedIds = reserved.Select(x => x.Id)
+            .Concat(skipped.Select(x => x.Id))
+            .Concat(delayedBlocked.Select(x => x.Id))
+            .Concat(pending.Select(x => x.Id))
+            .ToHashSet();
+        var dueBeforeSelected = unpaid.Where(x => !excludedIds.Contains(x.Id) && NextDueDate(x) <= selectedDate).ToList();
+
+        var upcomingBeforeSelected = dueBeforeSelected.Where(x => x.Category != BillCategory.DebtPayment).Sum(x => x.Amount);
+        var requiredDebtBeforeSelected = dueBeforeSelected.Where(x => x.Category == BillCategory.DebtPayment).Sum(x => x.Amount);
         var pendingTotal = pending.Sum(x => x.Amount);
+        var reservedTotal = reserved.Sum(x => x.Amount);
 
         var expectedIncome = data.IncomeEvents
-            .Where(x => x.Status != IncomeStatus.Received && x.ExpectedDate.Date >= today && x.ExpectedDate.Date <= horizon)
+            .Where(x => x.Status != IncomeStatus.Received && x.ExpectedDate.Date >= today && x.ExpectedDate.Date <= selectedDate)
             .Sum(x => x.NetAmount);
 
         var currentFunds = data.Funds.Total;
-        var amountLeftAfterBills = currentFunds + expectedIncome - pendingTotal - upcomingBeforePaycheck;
-        var amountLeftAfterBuffer = amountLeftAfterBills - data.Funds.Buffer;
+        var availableBeforeIncome = currentFunds - pendingTotal - reservedTotal - upcomingBeforeSelected - requiredDebtBeforeSelected;
+        var availableAfterIncome = availableBeforeIncome + expectedIncome;
+        var amountLeftAfterBuffer = availableAfterIncome - data.Funds.Buffer;
 
         var weekEnd = today.AddDays(7);
         var monthEnd = new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
 
         return new CashflowSummary
         {
+            SelectedDate = selectedDate,
             CurrentFunds = currentFunds,
             PendingPayments = pendingTotal,
-            UpcomingBillsBeforeNextPaycheck = upcomingBeforePaycheck,
-            ExpectedIncomeBeforeNextPaycheck = expectedIncome,
-            AmountLeftAfterBills = amountLeftAfterBills,
+            ReservedMoney = reservedTotal,
+            UpcomingBillsBeforeSelectedDate = upcomingBeforeSelected,
+            RequiredDebtPaymentsBeforeSelectedDate = requiredDebtBeforeSelected,
+            ExpectedIncomeBeforeSelectedDate = expectedIncome,
+            AvailableBeforeIncome = availableBeforeIncome,
+            AvailableAfterIncome = availableAfterIncome,
+            AmountLeftAfterBills = availableAfterIncome,
             BufferAmount = data.Funds.Buffer,
             AmountLeftAfterBuffer = amountLeftAfterBuffer,
             NextPaycheck = nextPaycheck,
@@ -77,7 +122,10 @@ public class CashflowService(HouseholdStore store)
             BillsDueThisMonth = unpaid.Where(x => NextDueDate(x) <= monthEnd).Sum(x => x.Amount),
             UnpaidBills = unpaid,
             PaidBills = paid,
-            PendingBills = pending
+            PendingBills = pending,
+            ReservedBills = reserved,
+            DelayedBills = delayedBlocked,
+            NeedsReviewTransactions = data.Transactions.Where(x => x.NeedsReview).OrderByDescending(x => x.Date).ToList()
         };
     }
 }

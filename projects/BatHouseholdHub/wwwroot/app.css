@@ -100,6 +100,9 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .badge.status-pending{background:#fdeec0;color:#8a6312}
 .badge.status-paid{background:var(--sage);color:#3a6b4c}
 .badge.status-review{background:#fde2e2;color:#a13a3a}
+.badge.status-reserved{background:#e3e8fb;color:#3c4a9a}
+.badge.status-delayed{background:#f3ddf7;color:#7a3c8a}
+.badge.status-skipped{background:var(--line);color:var(--muted);text-decoration:line-through}
 
 .funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
 
@@ -119,6 +122,9 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .cal-pill.status-paid{opacity:.5;text-decoration:line-through}
 .cal-pill.status-pending{outline:2px solid #8a6312}
 .cal-pill.status-review{outline:2px solid #a13a3a}
+.cal-pill.status-reserved{outline:2px solid #3c4a9a}
+.cal-pill.status-delayed{outline:2px solid #7a3c8a}
+.cal-pill.status-skipped{opacity:.4;text-decoration:line-through}
 @media(max-width:1000px){.month-calendar{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto}}
 @media(max-width:720px){.app-shell{display:block}.sidebar{position:fixed;z-index:10;bottom:0;top:auto;width:100%;height:70px;padding:8px 10px}.brand,.sidebar-note{display:none}.sidebar nav{display:flex;justify-content:space-around}.sidebar nav a{font-size:10px;display:grid;justify-items:center;gap:2px;padding:8px}.sidebar nav a:hover,.sidebar nav a.active{transform:none}.sidebar nav a:last-child{display:none}.sidebar nav span{font-size:18px}.topbar{height:64px}.content{padding:30px 18px 100px}.hero,.page-heading{align-items:flex-start;flex-direction:column}.hero h1,.page-heading h1{font-size:38px}.stat-grid,.two-column,.card-grid,.recipe-grid,.wish-grid{grid-template-columns:1fr}.stat-grid{gap:10px}.stat-card{min-height:120px}.form-grid{grid-template-columns:1fr}.form-grid .wide{grid-column:auto}.week-grid{display:flex;overflow-x:auto;padding-bottom:10px}.day-card{min-width:150px}.quick-add{grid-template-columns:1fr}.topbar{padding:0 18px}.wish-preview{grid-template-columns:1fr}.wish-preview-total{text-align:left}.search-window{grid-template-columns:auto 1fr}.search-window .button{grid-column:1/-1}.wish-summary{justify-content:space-between;gap:10px}}
 @media(max-width:720px){.capture-bar{grid-template-columns:1fr}.capture-bar .button{width:100%}}
