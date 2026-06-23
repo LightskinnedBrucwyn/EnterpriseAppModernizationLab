@@ -26,6 +26,7 @@ public class HouseholdStore
         Data = Load();
         var changed = EnsureStarterRecipes();
         changed |= EnsureKnownBills();
+        changed |= EnsureKnownIncomeSources();
         changed |= ProcessRecurringTransactions();
         if (changed)
             File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
@@ -172,42 +173,61 @@ public class HouseholdStore
     }
 
     /// <summary>The household's real-world bill list, organized the way Trey actually thinks
-    /// about them. Reconciled by name on every startup so renaming/adding here updates existing
-    /// installs without wiping amounts or due days the household has already entered.</summary>
-    private static readonly (string Name, BillCategory Category)[] KnownBills =
+    /// about them. Amounts and due days below come from mining the Rocket Money export for
+    /// recurring patterns; bills with no clear fixed amount are left at 0 with a note instead
+    /// of a guess. Reconciled by name on every startup so renaming/adding here updates existing
+    /// installs without wiping amounts the household has already entered themselves.</summary>
+    private static readonly (string Name, BillCategory Category, decimal Amount, int DueDay, BillFrequency Frequency, BillPriority Priority, string Notes)[] KnownBills =
     [
-        ("Chase card manual payment", BillCategory.DebtPayment),
-        ("Chase autopay", BillCategory.DebtPayment),
-        ("Affirm", BillCategory.DebtPayment),
-        ("Klover", BillCategory.DebtPayment),
-        ("Dave", BillCategory.DebtPayment),
-        ("Brigit", BillCategory.DebtPayment),
-        ("Ally car", BillCategory.DebtPayment),
-        ("SNAP Finance", BillCategory.DebtPayment),
-        ("Upgrade", BillCategory.DebtPayment),
-        ("Progressive", BillCategory.FixedBill),
-        ("Verizon", BillCategory.FixedBill),
-        ("Rocket Money", BillCategory.FixedBill),
-        ("IdentityIQ", BillCategory.FixedBill),
-        ("Experian", BillCategory.FixedBill),
-        ("Uber One", BillCategory.FixedBill),
-        ("HBO Max", BillCategory.FixedBill),
-        ("Claude", BillCategory.FixedBill),
-        ("Amazon Prime", BillCategory.FixedBill),
-        ("City of Davenport", BillCategory.FixedBill),
-        ("SoFi transfer", BillCategory.TransferSavings),
-        ("Apple Cash transfers", BillCategory.TransferSavings),
-        ("Zelle transfers", BillCategory.TransferSavings)
+        ("Chase card manual payment", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Manual extra payments vary in amount — update each cycle."),
+        ("Chase autopay", BillCategory.DebtPayment, 163m, 23, BillFrequency.Monthly, BillPriority.Debt, ""),
+        ("Affirm", BillCategory.DebtPayment, 161.44m, 22, BillFrequency.Monthly, BillPriority.Debt, "Combined total of simultaneous installment plans."),
+        ("Klover", BillCategory.DebtPayment, 4.99m, 22, BillFrequency.Monthly, BillPriority.Debt, "Membership fee only — cash advance repayments are separate and vary."),
+        ("Dave", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Highly variable ($25–$179) with no fixed cadence — confirm amount."),
+        ("Brigit", BillCategory.DebtPayment, 8.99m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("Ally car", BillCategory.DebtPayment, 439.44m, 28, BillFrequency.Monthly, BillPriority.Debt, ""),
+        ("SNAP Finance", BillCategory.DebtPayment, 21.50m, 15, BillFrequency.Biweekly, BillPriority.Debt, ""),
+        ("Upgrade", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "No matching transactions found — confirm amount and due day."),
+        ("Progressive", BillCategory.FixedBill, 169.66m, 22, BillFrequency.Monthly, BillPriority.Critical, ""),
+        ("Verizon", BillCategory.FixedBill, 64.55m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("Rocket Money", BillCategory.FixedBill, 10.66m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("IdentityIQ", BillCategory.FixedBill, 30.74m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("Experian", BillCategory.FixedBill, 27.05m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("Uber One", BillCategory.FixedBill, 9.99m, 28, BillFrequency.Monthly, BillPriority.Optional, ""),
+        ("HBO Max", BillCategory.FixedBill, 5.30m, 22, BillFrequency.Monthly, BillPriority.Optional, "Amount unverified from import — confirm against latest statement."),
+        ("Claude", BillCategory.FixedBill, 21.32m, 27, BillFrequency.Monthly, BillPriority.Subscription, ""),
+        ("Amazon Prime", BillCategory.FixedBill, 16.23m, 22, BillFrequency.Monthly, BillPriority.Subscription, "Prime Video Channels adds another ~$14.06 on a separate charge."),
+        ("City of Davenport", BillCategory.FixedBill, 40m, 3, BillFrequency.Monthly, BillPriority.Critical, ""),
+        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "No matching transactions found — confirm with Trey."),
+        ("Apple Cash transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
+        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill.")
     ];
 
     private bool EnsureKnownBills()
     {
         var changed = false;
-        foreach (var (name, category) in KnownBills)
+        foreach (var (name, category, amount, dueDay, frequency, priority, notes) in KnownBills)
         {
-            if (Data.Bills.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
-            Data.Bills.Add(new Bill { Name = name, Category = category });
-            changed = true;
+            var existing = Data.Bills.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+            {
+                Data.Bills.Add(new Bill
+                {
+                    Name = name, Category = category, Amount = amount, DueDay = dueDay,
+                    Frequency = frequency, Priority = priority, Notes = notes
+                });
+                changed = true;
+                continue;
+            }
+            if (existing.Amount == 0 && amount != 0)
+            {
+                existing.Amount = amount;
+                existing.DueDay = dueDay;
+                existing.Frequency = frequency;
+                existing.Priority = priority;
+                if (string.IsNullOrWhiteSpace(existing.Notes)) existing.Notes = notes;
+                changed = true;
+            }
         }
         return changed;
     }
@@ -220,6 +240,7 @@ public class HouseholdStore
         if (bill is null) return;
         var today = DateTime.Today;
         bill.LastPaidDate = today;
+        bill.ManualStatus = BillStatus.Upcoming;
         if (bill.Amount > 0)
         {
             Data.Transactions.Add(new Transaction
@@ -236,6 +257,14 @@ public class HouseholdStore
         await SaveAsync();
     }
 
+    public async Task MarkBillPendingAsync(Guid id)
+    {
+        var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
+        if (bill is null) return;
+        bill.ManualStatus = bill.ManualStatus == BillStatus.Pending ? BillStatus.Upcoming : BillStatus.Pending;
+        await SaveAsync();
+    }
+
     public async Task UnmarkBillPaidAsync(Guid id)
     {
         var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
@@ -245,6 +274,22 @@ public class HouseholdStore
             && x.Date.Year == paidDate.Year && x.Date.Month == paidDate.Month);
         if (posted is not null) Data.Transactions.Remove(posted);
         await SaveAsync();
+    }
+
+    /// <summary>Starter income sources so the Income timeline isn't empty on first run.
+    /// Amounts are left at 0 — Trey fills in real figures as paychecks come in.</summary>
+    private static readonly string[] KnownIncomeSources = ["ByteForza paycheck", "ByteForza bonus", "Vista final check"];
+
+    private bool EnsureKnownIncomeSources()
+    {
+        var changed = false;
+        foreach (var source in KnownIncomeSources)
+        {
+            if (Data.IncomeEvents.Any(x => x.Source.Equals(source, StringComparison.OrdinalIgnoreCase))) continue;
+            Data.IncomeEvents.Add(new IncomeEvent { Source = source, Owner = "Trey", Status = IncomeStatus.Estimated });
+            changed = true;
+        }
+        return changed;
     }
 
     public bool ProcessRecurringTransactions()

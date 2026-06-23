@@ -1,5 +1,6 @@
 @page "/calendar"
 @inject HouseholdStore Store
+@inject BillCalendarService BillCal
 
 <PageTitle>Calendar — Bat House</PageTitle>
 <section class="page-heading"><div><span class="kicker">EVERYTHING DUE, AT A GLANCE</span><h1>@CurrentMonth.ToString("MMMM yyyy")</h1><p>Bills, autopays, and transfers laid out across the month so nothing sneaks up on us.</p></div></section>
@@ -32,10 +33,9 @@
             var isToday = day == DateTime.Today;
             <div class="cal-day @(isToday ? "today" : "")">
                 <span class="cal-day-num">@day.Day</span>
-                @foreach (var bill in BillsOn(day.Day))
+                @foreach (var item in BillCal.BillsOnDay(CurrentMonth.Year, CurrentMonth.Month, day.Day))
                 {
-                    var paid = IsPaidThisCycle(bill);
-                    <span class="cal-pill @bill.Category.CssClass() @(paid ? "paid" : "")" title="@bill.Name">@bill.Name@(bill.Amount > 0 ? $" · {bill.Amount:C0}" : "")</span>
+                    <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
                 }
             </div>
         }
@@ -73,7 +73,5 @@
         for (var day = 1; day <= daysInMonth; day++) yield return new Cell(new DateTime(CurrentMonth.Year, CurrentMonth.Month, day));
     }
 
-    IEnumerable<Bill> BillsOn(int dueDay) => Store.Data.Bills.Where(x => x.IsActive && Math.Min(x.DueDay, DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month)) == dueDay).OrderBy(x => x.Category);
-    bool IsPaidThisCycle(Bill bill) => bill.LastPaidDate is { } d && d.Year == CurrentMonth.Year && d.Month == CurrentMonth.Month;
     decimal MonthTotal => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
 }

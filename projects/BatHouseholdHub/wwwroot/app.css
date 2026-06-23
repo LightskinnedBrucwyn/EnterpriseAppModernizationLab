@@ -81,7 +81,7 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 
 .bill-group{margin-bottom:20px}.bill-group .panel-head small{color:var(--muted);font-weight:500}
 .bill-list{display:grid;gap:8px}
-.bill-row{display:grid;grid-template-columns:14px 1fr auto auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--paper)}
+.bill-row{display:grid;grid-template-columns:14px 1fr auto auto auto auto;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--line);border-radius:14px;background:var(--paper)}
 .bill-row.bill-paid{opacity:.55}
 .bill-row.bill-paid .bill-info strong{text-decoration:line-through}
 .bill-dot{width:10px;height:10px;border-radius:50%;justify-self:center}
@@ -91,7 +91,20 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .bill-info{display:grid}.bill-info small{color:var(--muted)}
 .button.small{padding:8px 13px;font-size:12px}
 
+.badge{font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 9px;white-space:nowrap;justify-self:start}
+.badge.priority-critical{background:#fde2e2;color:#a13a3a}
+.badge.priority-debt{background:#fce8d6;color:#9a5a1e}
+.badge.priority-subscription{background:#e3e8fb;color:#3c4a9a}
+.badge.priority-optional{background:var(--line);color:var(--muted)}
+.badge.status-upcoming{background:var(--line);color:var(--muted)}
+.badge.status-pending{background:#fdeec0;color:#8a6312}
+.badge.status-paid{background:var(--sage);color:#3a6b4c}
+.badge.status-review{background:#fde2e2;color:#a13a3a}
+
+.funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
+
 .cal-nav{display:flex;align-items:center;gap:18px;margin-bottom:16px}
+.cal-nav.small{gap:8px;margin:0}.cal-nav.small .text-button{padding:4px 8px}
 .cal-legend{display:flex;gap:18px;flex-wrap:wrap;margin-bottom:16px}
 .cal-legend-item{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;color:var(--muted)}
 .cal-legend-item i{width:10px;height:10px;border-radius:50%;display:inline-block}
@@ -103,7 +116,9 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .cal-day.today{border-color:var(--violet);background:var(--sage)}
 .cal-day-num{font:700 16px 'Fraunces',serif}
 .cal-pill{font-size:9.5px;font-weight:700;color:#fff;border-radius:7px;padding:3px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cal-pill.paid{opacity:.5;text-decoration:line-through}
+.cal-pill.status-paid{opacity:.5;text-decoration:line-through}
+.cal-pill.status-pending{outline:2px solid #8a6312}
+.cal-pill.status-review{outline:2px solid #a13a3a}
 @media(max-width:1000px){.month-calendar{grid-template-columns:repeat(7,minmax(70px,1fr));overflow-x:auto}}
 @media(max-width:720px){.app-shell{display:block}.sidebar{position:fixed;z-index:10;bottom:0;top:auto;width:100%;height:70px;padding:8px 10px}.brand,.sidebar-note{display:none}.sidebar nav{display:flex;justify-content:space-around}.sidebar nav a{font-size:10px;display:grid;justify-items:center;gap:2px;padding:8px}.sidebar nav a:hover,.sidebar nav a.active{transform:none}.sidebar nav a:last-child{display:none}.sidebar nav span{font-size:18px}.topbar{height:64px}.content{padding:30px 18px 100px}.hero,.page-heading{align-items:flex-start;flex-direction:column}.hero h1,.page-heading h1{font-size:38px}.stat-grid,.two-column,.card-grid,.recipe-grid,.wish-grid{grid-template-columns:1fr}.stat-grid{gap:10px}.stat-card{min-height:120px}.form-grid{grid-template-columns:1fr}.form-grid .wide{grid-column:auto}.week-grid{display:flex;overflow-x:auto;padding-bottom:10px}.day-card{min-width:150px}.quick-add{grid-template-columns:1fr}.topbar{padding:0 18px}.wish-preview{grid-template-columns:1fr}.wish-preview-total{text-align:left}.search-window{grid-template-columns:auto 1fr}.search-window .button{grid-column:1/-1}.wish-summary{justify-content:space-between;gap:10px}}
 @media(max-width:720px){.capture-bar{grid-template-columns:1fr}.capture-bar .button{width:100%}}
