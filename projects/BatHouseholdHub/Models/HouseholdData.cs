@@ -3,7 +3,7 @@ namespace BatHouseholdHub.Models;
 public class HouseholdData
 {
     public List<Transaction> Transactions { get; set; } = [];
-    public List<CreditAccount> CreditAccounts { get; set; } = [];
+    public List<Bill> Bills { get; set; } = [];
     public List<Recipe> Recipes { get; set; } = [];
     public List<GroceryItem> Groceries { get; set; } = [];
     public List<MealPlan> MealPlans { get; set; } = [];
@@ -73,15 +73,19 @@ public class RecurringTransaction
     public bool IsActive { get; set; } = true;
 }
 
-public class CreditAccount
+public enum BillCategory { DebtPayment, FixedBill, TransferSavings }
+
+public class Bill
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
-    public string LastFour { get; set; } = "";
-    public decimal Balance { get; set; }
-    public decimal Limit { get; set; }
-    public decimal Apr { get; set; }
+    public BillCategory Category { get; set; } = BillCategory.FixedBill;
+    public decimal Amount { get; set; }
+    public decimal OriginalLoanAmount { get; set; }
     public int DueDay { get; set; } = 1;
+    public bool AutoPay { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime? LastPaidDate { get; set; }
 }
 
 public class Recipe
@@ -136,4 +140,21 @@ public class WishContribution
 {
     public decimal Amount { get; set; }
     public DateTime Date { get; set; } = DateTime.Today;
+}
+
+public static class BillCategoryExtensions
+{
+    public static string Label(this BillCategory category) => category switch
+    {
+        BillCategory.DebtPayment => "Debt Payment",
+        BillCategory.TransferSavings => "Transfer / Savings",
+        _ => "Fixed Bill"
+    };
+
+    public static string CssClass(this BillCategory category) => category switch
+    {
+        BillCategory.DebtPayment => "debt",
+        BillCategory.TransferSavings => "transfer",
+        _ => "fixed"
+    };
 }

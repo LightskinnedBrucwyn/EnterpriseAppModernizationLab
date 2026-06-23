@@ -1,0 +1,125 @@
+@page "/bills"
+@inject HouseholdStore Store
+
+<PageTitle>Bills — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">DEBT, FIXED BILLS &amp; TRANSFERS</span><h1>Every bill, one dashboard</h1><p>Mark a bill paid the moment it clears and the budget recalculates right away. Check <a href="calendar">the calendar</a> to see due dates laid out across the month.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add bill</button></section>
+
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="success-toast">✓ @StatusMessage</div>
+}
+
+@if (ShowForm)
+{
+    <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
+        <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
+        <label>Category<select @bind="Draft.Category">
+            <option value="@BillCategory.DebtPayment">Debt Payment</option>
+            <option value="@BillCategory.FixedBill">Fixed Bill</option>
+            <option value="@BillCategory.TransferSavings">Transfer / Savings</option>
+        </select></label>
+        <label>Amount per cycle<input type="number" step=".01" @bind="Draft.Amount" /></label>
+        <label>Original loan amount (optional)<input type="number" step=".01" @bind="Draft.OriginalLoanAmount" placeholder="Leave 0 if not a loan" /></label>
+        <label>Due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+        <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Autopay</label>
+    </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
+}
+
+<section class="stat-grid compact">
+    <div class="stat-card sage"><span>Total this cycle</span><strong>@TotalMonthly.ToString("C")</strong><small>@Store.Data.Bills.Count(x => x.IsActive) active bills</small></div>
+    <div class="stat-card butter"><span>Paid so far</span><strong>@PaidThisCycle.ToString("C")</strong><small>@PaidCount of @Store.Data.Bills.Count(x => x.IsActive) marked paid</small></div>
+    <div class="stat-card peach"><span>Still owed</span><strong>@RemainingThisCycle.ToString("C")</strong><small>this cycle</small></div>
+    <div class="stat-card lilac"><span>Next due</span><strong>@(NextDue?.Name ?? "All caught up")</strong><small>@(NextDue is null ? "" : $"{NextDue.Amount:C} · day {NextDue.DueDay}")</small></div>
+</section>
+
+@foreach (var group in Groups)
+{
+    <section class="panel bill-group">
+        <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span><h2>@group.Category.Label()</h2></div><b>@group.Total.ToString("C")<small> / cycle</small></b></div>
+        @if (!group.Bills.Any())
+        {
+            <p class="muted">Nothing in this category yet.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in group.Bills)
+                {
+                    var paid = IsPaidThisCycle(bill);
+                    <div class="bill-row @(paid ? "bill-paid" : "")">
+                        <span class="bill-dot @bill.Category.CssClass()"></span>
+                        <div class="bill-info"><strong>@bill.Name</strong><small>Due day @bill.DueDay @(bill.AutoPay ? "· Autopay" : "")@(bill.OriginalLoanAmount > 0 ? $" · {bill.Amount / bill.OriginalLoanAmount * 100:N0}% of {bill.OriginalLoanAmount:C0}" : "")</small></div>
+                        <b>@bill.Amount.ToString("C")</b>
+                        <span class="row-actions">
+                            <button class="icon-button" title="Edit" @onclick="() => Edit(bill)">✎</button>
+                            <button class="icon-button" title="Remove" @onclick="() => Delete(bill)">×</button>
+                            @if (paid)
+                            { <button class="button magic small" @onclick="() => UnmarkPaid(bill)">✓ Paid — undo</button> }
+                            else
+                            { <button class="button primary small" disabled="@(bill.Amount <= 0)" @onclick="() => MarkPaid(bill)">Mark paid</button> }
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+}
+
+<aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
+
+@code {
+    Bill Draft = new();
+    bool ShowForm;
+    Guid? EditingId;
+    string StatusMessage = "";
+
+    record BillGroup(BillCategory Category, List<Bill> Bills, decimal Total);
+    IEnumerable<BillGroup> Groups => Enum.GetValues<BillCategory>()
+        .Select(c => new BillGroup(c, Store.Data.Bills.Where(x => x.IsActive && x.Category == c).OrderBy(x => x.DueDay).ToList(), Store.Data.Bills.Where(x => x.IsActive && x.Category == c).Sum(x => x.Amount)));
+
+    decimal TotalMonthly => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
+    bool IsPaidThisCycle(Bill bill) => bill.LastPaidDate is { } d && d.Year == DateTime.Today.Year && d.Month == DateTime.Today.Month;
+    int PaidCount => Store.Data.Bills.Count(x => x.IsActive && IsPaidThisCycle(x));
+    decimal PaidThisCycle => Store.Data.Bills.Where(x => x.IsActive && IsPaidThisCycle(x)).Sum(x => x.Amount);
+    decimal RemainingThisCycle => TotalMonthly - PaidThisCycle;
+    Bill? NextDue
+    {
+        get
+        {
+            var today = DateTime.Today;
+            var unpaid = Store.Data.Bills.Where(x => x.IsActive && !IsPaidThisCycle(x)).ToList();
+            return unpaid.OrderBy(x => x.DueDay >= today.Day ? x.DueDay - today.Day : x.DueDay - today.Day + DateTime.DaysInMonth(today.Year, today.Month)).FirstOrDefault();
+        }
+    }
+
+    void CloseForm() { ShowForm = false; EditingId = null; Draft = new(); }
+    void Edit(Bill bill)
+    {
+        EditingId = bill.Id;
+        Draft = new() { Id = bill.Id, Name = bill.Name, Category = bill.Category, Amount = bill.Amount, OriginalLoanAmount = bill.OriginalLoanAmount, DueDay = bill.DueDay, AutoPay = bill.AutoPay, IsActive = bill.IsActive, LastPaidDate = bill.LastPaidDate };
+        ShowForm = true;
+    }
+    async Task SaveBill()
+    {
+        if (EditingId is Guid id)
+        {
+            var existing = Store.Data.Bills.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Name = Draft.Name; existing.Category = Draft.Category; existing.Amount = Draft.Amount;
+                existing.OriginalLoanAmount = Draft.OriginalLoanAmount; existing.DueDay = Draft.DueDay; existing.AutoPay = Draft.AutoPay;
+            }
+            StatusMessage = $"Updated \"{Draft.Name}\".";
+        }
+        else
+        {
+            Store.Data.Bills.Add(Draft);
+            StatusMessage = $"Added \"{Draft.Name}\" — {Draft.Amount:C}/cycle.";
+        }
+        await Store.SaveAsync();
+        CloseForm();
+    }
+    async Task Delete(Bill bill) { Store.Data.Bills.Remove(bill); await Store.SaveAsync(); }
+    async Task MarkPaid(Bill bill) { await Store.MarkBillPaidAsync(bill.Id); StatusMessage = $"Marked \"{bill.Name}\" paid — {bill.Amount:C} logged to Money."; }
+    async Task UnmarkPaid(Bill bill) { await Store.UnmarkBillPaidAsync(bill.Id); StatusMessage = $"Undid \"{bill.Name}\"."; }
+}

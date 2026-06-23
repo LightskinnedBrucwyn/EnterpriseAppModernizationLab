@@ -25,6 +25,7 @@ public class HouseholdStore
         _path = Path.Combine(folder, "household.json");
         Data = Load();
         var changed = EnsureStarterRecipes();
+        changed |= EnsureKnownBills();
         changed |= ProcessRecurringTransactions();
         if (changed)
             File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
@@ -168,6 +169,82 @@ public class HouseholdStore
         result.LatestDate = parsed.Count == 0 ? null : parsed.Max(x => x.Date);
         await SaveAsync();
         return result;
+    }
+
+    /// <summary>The household's real-world bill list, organized the way Trey actually thinks
+    /// about them. Reconciled by name on every startup so renaming/adding here updates existing
+    /// installs without wiping amounts or due days the household has already entered.</summary>
+    private static readonly (string Name, BillCategory Category)[] KnownBills =
+    [
+        ("Chase card manual payment", BillCategory.DebtPayment),
+        ("Chase autopay", BillCategory.DebtPayment),
+        ("Affirm", BillCategory.DebtPayment),
+        ("Klover", BillCategory.DebtPayment),
+        ("Dave", BillCategory.DebtPayment),
+        ("Brigit", BillCategory.DebtPayment),
+        ("Ally car", BillCategory.DebtPayment),
+        ("SNAP Finance", BillCategory.DebtPayment),
+        ("Upgrade", BillCategory.DebtPayment),
+        ("Progressive", BillCategory.FixedBill),
+        ("Verizon", BillCategory.FixedBill),
+        ("Rocket Money", BillCategory.FixedBill),
+        ("IdentityIQ", BillCategory.FixedBill),
+        ("Experian", BillCategory.FixedBill),
+        ("Uber One", BillCategory.FixedBill),
+        ("HBO Max", BillCategory.FixedBill),
+        ("Claude", BillCategory.FixedBill),
+        ("Amazon Prime", BillCategory.FixedBill),
+        ("City of Davenport", BillCategory.FixedBill),
+        ("SoFi transfer", BillCategory.TransferSavings),
+        ("Apple Cash transfers", BillCategory.TransferSavings),
+        ("Zelle transfers", BillCategory.TransferSavings)
+    ];
+
+    private bool EnsureKnownBills()
+    {
+        var changed = false;
+        foreach (var (name, category) in KnownBills)
+        {
+            if (Data.Bills.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+            Data.Bills.Add(new Bill { Name = name, Category = category });
+            changed = true;
+        }
+        return changed;
+    }
+
+    /// <summary>Marks a bill paid for the current cycle and logs the real expense so income
+    /// minus spending recalculates immediately on Money and Today instead of drifting out of sync.</summary>
+    public async Task MarkBillPaidAsync(Guid id)
+    {
+        var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
+        if (bill is null) return;
+        var today = DateTime.Today;
+        bill.LastPaidDate = today;
+        if (bill.Amount > 0)
+        {
+            Data.Transactions.Add(new Transaction
+            {
+                Date = today,
+                Description = bill.Name,
+                Category = bill.Category switch { BillCategory.DebtPayment => "Debt", BillCategory.TransferSavings => "Transfer", _ => "Bills" },
+                Owner = "Shared",
+                Amount = bill.Amount,
+                IsIncome = false,
+                Source = "Bill payment"
+            });
+        }
+        await SaveAsync();
+    }
+
+    public async Task UnmarkBillPaidAsync(Guid id)
+    {
+        var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
+        if (bill is null || bill.LastPaidDate is not { } paidDate) return;
+        bill.LastPaidDate = null;
+        var posted = Data.Transactions.FirstOrDefault(x => x.Source == "Bill payment" && x.Description == bill.Name
+            && x.Date.Year == paidDate.Year && x.Date.Month == paidDate.Month);
+        if (posted is not null) Data.Transactions.Remove(posted);
+        await SaveAsync();
     }
 
     public bool ProcessRecurringTransactions()
