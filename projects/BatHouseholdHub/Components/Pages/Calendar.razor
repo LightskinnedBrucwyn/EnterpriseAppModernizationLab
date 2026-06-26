@@ -1,0 +1,77 @@
+@page "/calendar"
+@inject HouseholdStore Store
+@inject BillCalendarService BillCal
+
+<PageTitle>Calendar — Bat House</PageTitle>
+<section class="page-heading"><div><span class="kicker">EVERYTHING DUE, AT A GLANCE</span><h1>@CurrentMonth.ToString("MMMM yyyy")</h1><p>Bills, autopays, and transfers laid out across the month so nothing sneaks up on us.</p></div></section>
+
+<div class="cal-nav">
+    <button class="button magic" @onclick="PrevMonth">← Previous</button>
+    <button class="text-button" @onclick="GoToday">Jump to today</button>
+    <button class="button magic" @onclick="NextMonth">Next →</button>
+</div>
+
+<div class="cal-legend">
+    <span class="cal-legend-item"><i class="debt"></i> Debt Payment</span>
+    <span class="cal-legend-item"><i class="fixed"></i> Fixed Bill</span>
+    <span class="cal-legend-item"><i class="transfer"></i> Transfer / Savings</span>
+    <span class="cal-legend-item"><i class="paid-dot"></i> Paid this cycle</span>
+</div>
+
+<div class="month-calendar">
+    @foreach (var label in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+    { <div class="cal-weekday">@label</div> }
+    @foreach (var cell in BuildCells())
+    {
+        if (cell.Day is null)
+        {
+            <div class="cal-day empty"></div>
+        }
+        else
+        {
+            var day = cell.Day.Value;
+            var isToday = day == DateTime.Today;
+            <div class="cal-day @(isToday ? "today" : "")">
+                <span class="cal-day-num">@day.Day</span>
+                @foreach (var item in BillCal.BillsOnDay(CurrentMonth.Year, CurrentMonth.Month, day.Day))
+                {
+                    <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
+                }
+            </div>
+        }
+    }
+</div>
+
+<section class="panel" style="margin-top:24px">
+    <div class="panel-head"><div><span class="kicker">THIS MONTH</span><h2>Calendar totals</h2></div><b>@MonthTotal.ToString("C")<small> due in @CurrentMonth.ToString("MMMM")</small></b></div>
+    <div class="bill-list">
+        @foreach (var group in Enum.GetValues<BillCategory>())
+        {
+            var bills = Store.Data.Bills.Where(x => x.IsActive && x.Category == group).ToList();
+            <div class="bill-row">
+                <span class="bill-dot @group.CssClass()"></span>
+                <div class="bill-info"><strong>@group.Label()</strong><small>@bills.Count bills</small></div>
+                <b>@bills.Sum(x => x.Amount).ToString("C")</b>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    DateTime CurrentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    record Cell(DateTime? Day);
+
+    void PrevMonth() => CurrentMonth = CurrentMonth.AddMonths(-1);
+    void NextMonth() => CurrentMonth = CurrentMonth.AddMonths(1);
+    void GoToday() => CurrentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+
+    IEnumerable<Cell> BuildCells()
+    {
+        var daysInMonth = DateTime.DaysInMonth(CurrentMonth.Year, CurrentMonth.Month);
+        var leadingBlanks = (int)CurrentMonth.DayOfWeek;
+        for (var i = 0; i < leadingBlanks; i++) yield return new Cell(null);
+        for (var day = 1; day <= daysInMonth; day++) yield return new Cell(new DateTime(CurrentMonth.Year, CurrentMonth.Month, day));
+    }
+
+    decimal MonthTotal => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
+}

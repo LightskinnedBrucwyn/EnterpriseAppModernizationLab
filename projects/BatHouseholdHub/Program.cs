@@ -25,6 +25,8 @@ builder.Services.AddServerSideBlazor(options =>
     options.JSInteropDefaultCallTimeout = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddSingleton<HouseholdStore>();
+builder.Services.AddScoped<CashflowService>();
+builder.Services.AddScoped<BillCalendarService>();
 builder.Services.AddHostedService<RecurringTransactionService>();
 builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddHttpClient<OpenGraphScraperService>();

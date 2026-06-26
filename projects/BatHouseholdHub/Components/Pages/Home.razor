@@ -60,6 +60,32 @@
     <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
 </details>
 
+<section class="panel">
+    <div class="panel-head"><div><span class="kicker">JESS'S FAVE SHOPPING</span><h2>Quick shopping tabs</h2><p class="muted">One click to her go-to stores — opens in a new tab.</p></div><button class="icon-button" title="Add a site" @onclick="() => ShowSiteForm = !ShowSiteForm">＋</button></div>
+    <div class="site-tabs">
+        @foreach (var site in Store.Data.ShoppingSites)
+        {
+            <a class="site-tab" target="_blank" href="@site.Url">@site.Name<button class="delete-button" title="Remove" @onclick:preventDefault @onclick:stopPropagation @onclick="() => DeleteSite(site.Id)">×</button></a>
+        }
+    </div>
+    @if (ShowSiteForm)
+    {
+        <div class="form-grid">
+            <label>Site name<input @bind="NewSiteName" placeholder="e.g. Nordstrom" /></label>
+            <label class="wide">Link<input @bind="NewSiteUrl" placeholder="https://…" /></label>
+            <label>For whom?<select @bind="NewSiteOwner"><option>Jess</option><option>Me</option><option>Shared</option></select></label>
+        </div>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(NewSiteName) || !IsWebUrl(NewSiteUrl))" @onclick="AddSite">Add tab</button>
+            <button class="text-button" @onclick="() => ShowSiteForm = false">Cancel</button>
+        </div>
+    }
+    <div class="search-window">
+        <span class="search-icon">⌕</span><input @bind="ShopSearch" @bind:event="oninput" placeholder="Search for something to buy…" />
+        <a class="button magic" target="_blank" href="@ShopSearchUrl">Search the web ↗</a>
+    </div>
+</section>
+
 <section class="cat-corner">
     <span class="cat-face">@CatFace</span>
     <div><span class="kicker">THE GOTHAM LOUNGE</span><blockquote>“@Quote”</blockquote><cite>— low-key Larry June energy, Gotham edition</cite></div>
@@ -68,7 +94,7 @@
 
 <section class="stat-grid">
     <div class="stat-card sage"><span>Left this month</span><strong>@Remaining.ToString("C0")</strong><small>@Income.ToString("C0") income · @Spending.ToString("C0") spent</small></div>
-    <div class="stat-card peach"><span>Next bill due</span><strong>@NextDue</strong><small>@(Store.Data.CreditAccounts.FirstOrDefault()?.Name ?? "Add a bill")</small></div>
+    <div class="stat-card peach"><span>Next bill due</span><strong>@NextDue</strong><small>@(NextDueBill is null ? "Add a bill" : $"{NextDueBill.Name} · {NextDueBill.Amount:C0}")</small></div>
     <div class="stat-card butter"><span>Groceries left</span><strong>@Store.Data.Groceries.Count(x => !x.IsChecked) items</strong><small><a href="food">Open the shopping list →</a></small></div>
     <div class="stat-card lilac"><span>Dinner tonight</span><strong class="meal-name">@TonightMeal</strong><small><a href="food">See the week →</a></small></div>
 </section>
@@ -146,7 +172,31 @@
         EditingGoal = false;
     }
     string TonightMeal => Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == DateTime.Today)?.Meal ?? "Pick something cozy";
-    string NextDue { get { var card = Store.Data.CreditAccounts.FirstOrDefault(); return card is null ? "Nothing yet" : $"Day {card.DueDay}"; } }
+
+    bool ShowSiteForm;
+    string NewSiteName = "", NewSiteUrl = "", NewSiteOwner = "Jess";
+    string ShopSearch = "";
+    string ShopSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(ShopSearch) ? "shopping" : ShopSearch)}";
+    static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    async Task AddSite()
+    {
+        await Store.AddShoppingSiteAsync(NewSiteName, NewSiteUrl, NewSiteOwner);
+        NewSiteName = ""; NewSiteUrl = ""; NewSiteOwner = "Jess";
+        ShowSiteForm = false;
+    }
+    async Task DeleteSite(Guid id) => await Store.DeleteShoppingSiteAsync(id);
+    Bill? NextDueBill
+    {
+        get
+        {
+            var today = DateTime.Today;
+            bool PaidThisCycle(Bill b) => b.LastPaidDate is { } d && d.Year == today.Year && d.Month == today.Month;
+            return Store.Data.Bills.Where(x => x.IsActive && !PaidThisCycle(x))
+                .OrderBy(x => x.DueDay >= today.Day ? x.DueDay - today.Day : x.DueDay - today.Day + DateTime.DaysInMonth(today.Year, today.Month))
+                .FirstOrDefault();
+        }
+    }
+    string NextDue => NextDueBill is null ? "Nothing yet" : $"Day {NextDueBill.DueDay}";
     static string Icon(string category) => category switch { "Groceries" => "🛒", "Bills" => "⌁", "Income" => "↗", _ => "•" };
 
     string UploadNote = "";
