@@ -27,6 +27,7 @@ public class HouseholdStore
         var changed = EnsureStarterRecipes();
         changed |= EnsureKnownBills();
         changed |= EnsureKnownIncomeSources();
+        changed |= EnsureKnownShoppingSites();
         changed |= LinkDelayedBillsToIncome();
         changed |= ProcessRecurringTransactions();
         if (changed)
@@ -379,6 +380,39 @@ public class HouseholdStore
     /// <summary>Starter income sources so the Income timeline isn't empty on first run.
     /// Amounts are left at 0 — Trey fills in real figures as paychecks come in.</summary>
     private static readonly string[] KnownIncomeSources = ["ByteForza paycheck", "ByteForza bonus", "Vista final check"];
+
+    private static readonly (string Name, string Url)[] KnownShoppingSites =
+    [
+        ("Amazon", "https://www.amazon.com"),
+        ("Target", "https://www.target.com"),
+        ("SHEIN", "https://www.shein.com"),
+        ("Old Navy", "https://oldnavy.gap.com"),
+        ("Etsy", "https://www.etsy.com")
+    ];
+
+    private bool EnsureKnownShoppingSites()
+    {
+        var changed = false;
+        foreach (var (name, url) in KnownShoppingSites)
+        {
+            if (Data.ShoppingSites.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
+            Data.ShoppingSites.Add(new ShoppingSite { Name = name, Url = url, Owner = "Jess" });
+            changed = true;
+        }
+        return changed;
+    }
+
+    public async Task AddShoppingSiteAsync(string name, string url, string owner)
+    {
+        Data.ShoppingSites.Add(new ShoppingSite { Name = name.Trim(), Url = url.Trim(), Owner = owner });
+        await SaveAsync();
+    }
+
+    public async Task DeleteShoppingSiteAsync(Guid id)
+    {
+        Data.ShoppingSites.RemoveAll(x => x.Id == id);
+        await SaveAsync();
+    }
 
     private bool EnsureKnownIncomeSources()
     {

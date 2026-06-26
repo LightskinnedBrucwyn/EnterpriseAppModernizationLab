@@ -10,6 +10,7 @@ public class HouseholdData
     public List<SavingsGoal> SavingsGoals { get; set; } = [];
     public List<RecurringTransaction> RecurringTransactions { get; set; } = [];
     public List<PurchaseIdea> PurchaseIdeas { get; set; } = [];
+    public List<ShoppingSite> ShoppingSites { get; set; } = [];
     public List<UploadedFile> UploadedFiles { get; set; } = [];
     public List<DebtAccount> DebtAccounts { get; set; } = [];
     public List<IncomeEvent> IncomeEvents { get; set; } = [];
@@ -202,6 +203,15 @@ public class WishContribution
 {
     public decimal Amount { get; set; }
     public DateTime Date { get; set; } = DateTime.Today;
+}
+
+/// <summary>A quick-link shortcut to a favorite shopping site, shown as a tab on the Home page.</summary>
+public class ShoppingSite
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public string Owner { get; set; } = "Jess";
 }
 
 public static class BillCategoryExtensions
