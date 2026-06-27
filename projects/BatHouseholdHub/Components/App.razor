@@ -10,11 +10,7 @@
     <link rel="stylesheet" href="BatHouseholdHub.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <script>
-        (function () {
-            var saved = localStorage.getItem('bat-house-theme');
-            var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-            document.documentElement.setAttribute('data-theme', theme);
-        })();
+        document.documentElement.setAttribute('data-theme', 'dark');
     </script>
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
@@ -22,7 +18,6 @@
 <body>
     <Routes @rendermode="InteractiveServer" />
     <script src="_framework/blazor.web.js"></script>
-    <script src="theme.js?v=@AssetVersion"></script>
 </body>
 
 </html>

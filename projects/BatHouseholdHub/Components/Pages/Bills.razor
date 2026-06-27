@@ -2,315 +2,478 @@
 @inject HouseholdStore Store
 @inject CashflowService Cashflow
 @inject BillCalendarService BillCal
+@inject ILoggerFactory LoggerFactory
 
-<PageTitle>Bills — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">AVAILABLE FUNDS, BILLS &amp; INCOME</span><h1>Bills and cashflow</h1><p>What we have, what's due, and what's left after covering it. Check <a href="calendar">the calendar</a> for due dates laid out across the month.</p></div><button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add bill</button></section>
+<PageTitle>Bills & Money — Manor</PageTitle>
+<section class="page-heading">
+    <div><span class="kicker">BILLS &amp; MONEY</span><h1>Bills and cashflow</h1><p>What we have, what's due, what's left, and everything that moved through the accounts. Check <a href="calendar">the calendar</a> for due dates laid out across the month.</p></div>
+    @if (Tab == "Overview")
+    { <button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add bill</button> }
+    else
+    { <button class="button primary" @onclick="OpenAddTxForm">＋ Add transaction</button> }
+</section>
+
+<div class="food-tabs">
+    <button class="@(Tab == "Overview" ? "active" : "")" @onclick='() => Tab = "Overview"'>Overview</button>
+    <button class="@(Tab == "Transactions" ? "active" : "")" @onclick='() => Tab = "Transactions"'>Transactions</button>
+</div>
 
 @if (!string.IsNullOrWhiteSpace(StatusMessage))
 {
-    <div class="success-toast">✓ @StatusMessage</div>
+    <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLastTx">Undo</button> }</div>
 }
 
-<section class="panel funds-panel">
-    <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@Store.Data.Funds.Total.ToString("C")</b></div>
-    <div class="form-grid">
-        <label>Trey<input type="number" step=".01" @bind="FundsDraft.Trey" /></label>
-        <label>Jess<input type="number" step=".01" @bind="FundsDraft.Jess" /></label>
-        <label>Shared<input type="number" step=".01" @bind="FundsDraft.Shared" /></label>
-        <label>Buffer to keep aside<input type="number" step=".01" @bind="FundsDraft.Buffer" /></label>
-    </div>
-    <div class="form-actions">
-        <button class="button primary" @onclick="SaveFunds">Save funds</button>
-        <small class="muted">Last updated @Store.Data.Funds.LastUpdated.ToString("MMM d, yyyy")</small>
-    </div>
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">OVERVIEW</span><h2>Looking at</h2></div></div>
-    <div class="food-tabs">
-        <button class="@(SelectedWindow == CashflowWindow.UntilNextPaycheck ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.UntilNextPaycheck">Until next paycheck</button>
-        <button class="@(SelectedWindow == CashflowWindow.ThisMonth ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.ThisMonth">This month</button>
-        <button class="@(SelectedWindow == CashflowWindow.Next30Days ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.Next30Days">Next 30 days</button>
-        <button class="@(SelectedWindow == CashflowWindow.Custom ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.Custom">Custom date</button>
-    </div>
-    @if (SelectedWindow == CashflowWindow.Custom)
-    {
-        <label>Through<input type="date" @bind="CustomDate" /></label>
-    }
-    <small class="muted">Looking through @Summary.SelectedDate.ToString("MMM d, yyyy").</small>
-</section>
-
-<section class="stat-grid compact">
-    <div class="stat-card sage"><span>Total available funds</span><strong>@Summary.CurrentFunds.ToString("C")</strong></div>
-    <div class="stat-card butter"><span>Pending payments</span><strong>@Summary.PendingPayments.ToString("C")</strong></div>
-    <div class="stat-card lilac"><span>Reserved money</span><strong>@Summary.ReservedMoney.ToString("C")</strong></div>
-    <div class="stat-card peach"><span>Upcoming bills due</span><strong>@Summary.UpcomingBillsBeforeSelectedDate.ToString("C")</strong></div>
-    <div class="stat-card peach"><span>Debt payments due</span><strong>@Summary.RequiredDebtPaymentsBeforeSelectedDate.ToString("C")</strong></div>
-    <div class="stat-card lilac"><span>Expected income</span><strong>@Summary.ExpectedIncomeBeforeSelectedDate.ToString("C")</strong></div>
-    <div class="stat-card butter"><span>Available before next income</span><strong>@Summary.AvailableBeforeIncome.ToString("C")</strong></div>
-    <div class="stat-card sage"><span>Amount left after bills</span><strong>@Summary.AmountLeftAfterBills.ToString("C")</strong></div>
-    <div class="stat-card sage"><span>Amount left after buffer</span><strong>@Summary.AmountLeftAfterBuffer.ToString("C")</strong></div>
-</section>
-
-@if (ShowForm)
+@if (Tab == "Overview")
 {
-    <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
-        <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
-        <label>Category<select @bind="Draft.Category">
-            <option value="@BillCategory.DebtPayment">Debt Payment</option>
-            <option value="@BillCategory.FixedBill">Fixed Bill</option>
-            <option value="@BillCategory.TransferSavings">Transfer / Savings</option>
-        </select></label>
-        <label>Amount per cycle<input type="number" step=".01" @bind="Draft.Amount" /></label>
-        <label>Original loan amount (optional)<input type="number" step=".01" @bind="Draft.OriginalLoanAmount" placeholder="Leave 0 if not a loan" /></label>
-        <label>Due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
-        <label>Frequency<select @bind="Draft.Frequency">
-            <option value="@BillFrequency.Monthly">Monthly</option>
-            <option value="@BillFrequency.Weekly">Weekly</option>
-            <option value="@BillFrequency.Biweekly">Biweekly</option>
-            <option value="@BillFrequency.Quarterly">Quarterly</option>
-            <option value="@BillFrequency.Yearly">Yearly</option>
-        </select></label>
-        <label>Priority<select @bind="Draft.Priority">
-            <option value="@BillPriority.Critical">Critical</option>
-            <option value="@BillPriority.Debt">Debt</option>
-            <option value="@BillPriority.Subscription">Subscription</option>
-            <option value="@BillPriority.Optional">Optional</option>
-        </select></label>
-        <label>Money type<select @bind="Draft.MoneyType">
-            <option value="@MoneyType.Cash">Cash</option>
-            <option value="@MoneyType.Income">Income</option>
-            <option value="@MoneyType.Expense">Expense</option>
-            <option value="@MoneyType.Transfer">Transfer</option>
-            <option value="@MoneyType.RentReserve">Rent Reserve</option>
-            <option value="@MoneyType.DebtPayment">Debt Payment</option>
-            <option value="@MoneyType.SavingsMove">Savings Move</option>
-        </select></label>
-        <label>Status<select @bind="Draft.ManualStatus">
-            <option value="@BillStatus.Upcoming">Upcoming</option>
-            <option value="@BillStatus.Pending">Pending</option>
-            <option value="@BillStatus.Reserved">Reserved</option>
-            <option value="@BillStatus.Delayed">Delayed</option>
-            <option value="@BillStatus.Skipped">Skipped</option>
-        </select></label>
-        @if (Draft.ManualStatus == BillStatus.Delayed)
-        {
-            <label>Waiting on income<select @onchange="e => Draft.LinkedIncomeEventId = Guid.TryParse(e.Value?.ToString(), out var gid) ? gid : null">
-                <option value="">— choose —</option>
-                @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
-                { <option value="@income.Id" selected="@(Draft.LinkedIncomeEventId == income.Id)">@income.Source</option> }
-            </select></label>
-        }
-        <label>Owner<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
-        <label>Notes<input @bind="Draft.Notes" placeholder="Optional" /></label>
-        <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Autopay</label>
-    </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
-}
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">UPCOMING BILLS</span><h2>Coming up</h2></div></div>
-    @{ var upcomingOnly = Summary.UnpaidBills.Where(x => x.EffectiveStatus(DateTime.Today) == BillStatus.Upcoming).OrderBy(x => x.DueDay).Take(8).ToList(); }
-    @if (!upcomingOnly.Any())
-    {
-        <p class="muted">Nothing unpaid right now.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var bill in upcomingOnly)
-            { @BillRow(bill) }
-        </div>
-    }
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">BILL CALENDAR</span><h2>@MonthCursor.ToString("MMMM yyyy")</h2></div>
-        <div class="cal-nav small"><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(-1)">←</button><button class="text-button" @onclick="() => MonthCursor = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)">Today</button><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(1)">→</button></div>
-    </div>
-    <div class="month-calendar">
-        @foreach (var label in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
-        { <div class="cal-weekday">@label</div> }
-        @foreach (var cell in BuildCells())
-        {
-            if (cell is null)
-            {
-                <div class="cal-day empty"></div>
-            }
-            else
-            {
-                var day = cell.Value;
-                <div class="cal-day @(day == DateTime.Today ? "today" : "")">
-                    <span class="cal-day-num">@day.Day</span>
-                    @foreach (var item in BillCal.BillsOnDay(MonthCursor.Year, MonthCursor.Month, day.Day))
-                    {
-                        <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
-                    }
-                </div>
-            }
-        }
-    </div>
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">PENDING PAYMENTS</span><h2>Already pending</h2></div></div>
-    <p class="muted">Money that's already committed, even if the bank still shows it sitting in the account.</p>
-    @if (!Summary.PendingBills.Any())
-    {
-        <p class="muted">Nothing marked pending.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var bill in Summary.PendingBills)
-            { @BillRow(bill) }
-        </div>
-    }
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">RESERVED MONEY</span><h2>Set aside, not spendable</h2></div></div>
-    @if (!Summary.ReservedBills.Any())
-    {
-        <p class="muted">Nothing reserved right now.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var bill in Summary.ReservedBills)
-            { @BillRow(bill) }
-        </div>
-    }
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">DELAYED</span><h2>Waiting on income to arrive</h2></div></div>
-    @if (!Summary.DelayedBills.Any())
-    {
-        <p class="muted">Nothing waiting on income right now.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var bill in Summary.DelayedBills)
-            { @BillRow(bill) }
-        </div>
-    }
-</section>
-
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">INCOME</span><h2>Income timeline</h2></div><button class="button magic small" @onclick="() => ShowIncomeForm = !ShowIncomeForm">＋ Add income</button></div>
-    @if (ShowIncomeForm)
-    {
+    <section class="panel funds-panel">
+        <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@Store.Data.Funds.Total.ToString("C")</b></div>
         <div class="form-grid">
-            <label>Source<input @bind="IncomeDraft.Source" placeholder="ByteForza paycheck" /></label>
-            <label>Owner<select @bind="IncomeDraft.Owner"><option>Trey</option><option>Jess</option><option>Shared</option></select></label>
-            <label>Net amount<input type="number" step=".01" @bind="IncomeDraft.NetAmount" /></label>
-            <label>Expected date<input type="date" @bind="IncomeDraft.ExpectedDate" /></label>
-            <label>Pay period start<input type="date" @bind="IncomeDraft.PayPeriodStart" /></label>
-            <label>Pay period end<input type="date" @bind="IncomeDraft.PayPeriodEnd" /></label>
-            <label>Status<select @bind="IncomeDraft.Status">
-                <option value="@IncomeStatus.Estimated">Estimated</option>
-                <option value="@IncomeStatus.Pending">Pending</option>
-                <option value="@IncomeStatus.Received">Received</option>
+            <label>Trey<input type="number" step=".01" @bind="FundsDraft.Trey" /></label>
+            <label>Jess<input type="number" step=".01" @bind="FundsDraft.Jess" /></label>
+            <label>Shared<input type="number" step=".01" @bind="FundsDraft.Shared" /></label>
+            <label>Buffer to keep aside<input type="number" step=".01" @bind="FundsDraft.Buffer" /></label>
+        </div>
+        <div class="form-actions">
+            <button class="button primary" @onclick="SaveFunds">Save funds</button>
+            <small class="muted">Last updated @Store.Data.Funds.LastUpdated.ToString("MMM d, yyyy")</small>
+        </div>
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">OVERVIEW</span><h2>Looking at</h2></div></div>
+        <div class="food-tabs">
+            <button class="@(SelectedWindow == CashflowWindow.UntilNextPaycheck ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.UntilNextPaycheck">Until next paycheck</button>
+            <button class="@(SelectedWindow == CashflowWindow.ThisMonth ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.ThisMonth">This month</button>
+            <button class="@(SelectedWindow == CashflowWindow.Next30Days ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.Next30Days">Next 30 days</button>
+            <button class="@(SelectedWindow == CashflowWindow.Custom ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.Custom">Custom date</button>
+        </div>
+        @if (SelectedWindow == CashflowWindow.Custom)
+        {
+            <label>Through<input type="date" @bind="CustomDate" /></label>
+        }
+        <small class="muted">Looking through @Summary.SelectedDate.ToString("MMM d, yyyy").</small>
+    </section>
+
+    <section class="stat-grid compact">
+        <div class="stat-card sage"><span>Total available funds</span><strong>@Summary.CurrentFunds.ToString("C")</strong></div>
+        <div class="stat-card butter"><span>Pending payments</span><strong>@Summary.PendingPayments.ToString("C")</strong></div>
+        <div class="stat-card lilac"><span>Reserved money</span><strong>@Summary.ReservedMoney.ToString("C")</strong></div>
+        <div class="stat-card peach"><span>Upcoming bills due</span><strong>@Summary.UpcomingBillsBeforeSelectedDate.ToString("C")</strong></div>
+        <div class="stat-card peach"><span>Debt payments due</span><strong>@Summary.RequiredDebtPaymentsBeforeSelectedDate.ToString("C")</strong></div>
+        <div class="stat-card lilac"><span>Expected income</span><strong>@Summary.ExpectedIncomeBeforeSelectedDate.ToString("C")</strong></div>
+        <div class="stat-card butter"><span>Available before next income</span><strong>@Summary.AvailableBeforeIncome.ToString("C")</strong></div>
+        <div class="stat-card sage"><span>Amount left after bills</span><strong>@Summary.AmountLeftAfterBills.ToString("C")</strong></div>
+        <div class="stat-card sage"><span>Amount left after buffer</span><strong>@Summary.AmountLeftAfterBuffer.ToString("C")</strong></div>
+    </section>
+
+    @if (ShowForm)
+    {
+        <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
+            <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
+            <label>Category<select @bind="Draft.Category">
+                <option value="@BillCategory.DebtPayment">Debt Payment</option>
+                <option value="@BillCategory.FixedBill">Fixed Bill</option>
+                <option value="@BillCategory.TransferSavings">Transfer / Savings</option>
             </select></label>
-        </div>
-        <div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(IncomeDraft.Source))" @onclick="SaveIncome">Save income</button><button class="text-button" @onclick="() => { ShowIncomeForm = false; IncomeDraft = new(); }">Cancel</button></div>
-    }
-    @if (!Store.Data.IncomeEvents.Any())
-    {
-        <p class="muted">No income logged yet.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var income in Store.Data.IncomeEvents.OrderBy(x => x.ExpectedDate))
+            <label>Amount per cycle<input type="number" step=".01" @bind="Draft.Amount" /></label>
+            <label>Original loan amount (optional)<input type="number" step=".01" @bind="Draft.OriginalLoanAmount" placeholder="Leave 0 if not a loan" /></label>
+            <label>Due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+            <label>Frequency<select @bind="Draft.Frequency">
+                <option value="@BillFrequency.Monthly">Monthly</option>
+                <option value="@BillFrequency.Weekly">Weekly</option>
+                <option value="@BillFrequency.Biweekly">Biweekly</option>
+                <option value="@BillFrequency.Quarterly">Quarterly</option>
+                <option value="@BillFrequency.Yearly">Yearly</option>
+            </select></label>
+            <label>Priority<select @bind="Draft.Priority">
+                <option value="@BillPriority.Critical">Critical</option>
+                <option value="@BillPriority.Debt">Debt</option>
+                <option value="@BillPriority.Subscription">Subscription</option>
+                <option value="@BillPriority.Optional">Optional</option>
+            </select></label>
+            <label>Money type<select @bind="Draft.MoneyType">
+                <option value="@MoneyType.Cash">Cash</option>
+                <option value="@MoneyType.Income">Income</option>
+                <option value="@MoneyType.Expense">Expense</option>
+                <option value="@MoneyType.Transfer">Transfer</option>
+                <option value="@MoneyType.RentReserve">Rent Reserve</option>
+                <option value="@MoneyType.DebtPayment">Debt Payment</option>
+                <option value="@MoneyType.SavingsMove">Savings Move</option>
+            </select></label>
+            <label>Status<select @bind="Draft.ManualStatus">
+                <option value="@BillStatus.Upcoming">Upcoming</option>
+                <option value="@BillStatus.Pending">Pending</option>
+                <option value="@BillStatus.Reserved">Reserved</option>
+                <option value="@BillStatus.Delayed">Delayed</option>
+                <option value="@BillStatus.Skipped">Skipped</option>
+            </select></label>
+            @if (Draft.ManualStatus == BillStatus.Delayed)
             {
-                var waitingCount = Store.Data.Bills.Count(x => x.IsActive && x.ManualStatus == BillStatus.Delayed && x.LinkedIncomeEventId == income.Id);
-                <div class="bill-row">
-                    <span class="bill-dot @(income.Status == IncomeStatus.Received ? "fixed" : "transfer")"></span>
-                    <div class="bill-info"><strong>@income.Source</strong><small>@income.Owner · @income.ExpectedDate.ToString("MMM d") · @income.Status @(waitingCount > 0 ? $"· {waitingCount} bill(s) waiting" : "")</small></div>
-                    <b>@income.NetAmount.ToString("C")</b>
-                    <span class="row-actions">
-                        @if (income.Status != IncomeStatus.Received)
-                        { <button class="button magic small" @onclick="() => MarkIncomeReceived(income)">Mark received</button> }
-                        <button class="icon-button" title="Remove" @onclick="() => DeleteIncome(income)">×</button>
-                    </span>
-                </div>
+                <label>Waiting on income<select @onchange="e => Draft.LinkedIncomeEventId = Guid.TryParse(e.Value?.ToString(), out var gid) ? gid : null">
+                    <option value="">— choose —</option>
+                    @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
+                    { <option value="@income.Id" selected="@(Draft.LinkedIncomeEventId == income.Id)">@income.Source</option> }
+                </select></label>
+            }
+            <label>Owner<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
+            <label>Notes<input @bind="Draft.Notes" placeholder="Optional" /></label>
+            <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Autopay</label>
+        </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
+    }
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">UPCOMING BILLS</span><h2>Coming up</h2></div></div>
+        @{ var upcomingOnly = Summary.UnpaidBills.Where(x => x.EffectiveStatus(DateTime.Today) == BillStatus.Upcoming).OrderBy(x => x.DueDay).Take(8).ToList(); }
+        @if (!upcomingOnly.Any())
+        {
+            <p class="muted">Nothing unpaid right now.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in upcomingOnly)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">BILL CALENDAR</span><h2>@MonthCursor.ToString("MMMM yyyy")</h2></div>
+            <div class="cal-nav small"><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(-1)">←</button><button class="text-button" @onclick="() => MonthCursor = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)">Today</button><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(1)">→</button></div>
+        </div>
+        <div class="month-calendar">
+            @foreach (var label in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
+            { <div class="cal-weekday">@label</div> }
+            @foreach (var cell in BuildCells())
+            {
+                if (cell is null)
+                {
+                    <div class="cal-day empty"></div>
+                }
+                else
+                {
+                    var day = cell.Value;
+                    <div class="cal-day @(day == DateTime.Today ? "today" : "")">
+                        <span class="cal-day-num">@day.Day</span>
+                        @foreach (var item in BillCal.BillsOnDay(MonthCursor.Year, MonthCursor.Month, day.Day))
+                        {
+                            <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
+                        }
+                    </div>
+                }
             }
         </div>
-    }
-</section>
+    </section>
 
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">DEBT</span><h2>Debt payments</h2></div></div>
-    @{ var debtBills = Store.Data.Bills.Where(x => x.IsActive && x.Category == BillCategory.DebtPayment).OrderBy(x => x.DueDay).ToList(); }
-    @if (!debtBills.Any())
-    {
-        <p class="muted">No debt payments yet.</p>
-    }
-    else
-    {
-        <div class="bill-list">
-            @foreach (var bill in debtBills)
-            { @BillRow(bill) }
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">PENDING PAYMENTS</span><h2>Already pending</h2></div></div>
+        <p class="muted">Money that's already committed, even if the bank still shows it sitting in the account.</p>
+        @if (!Summary.PendingBills.Any())
+        {
+            <p class="muted">Nothing marked pending.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in Summary.PendingBills)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">RESERVED MONEY</span><h2>Set aside, not spendable</h2></div></div>
+        @if (!Summary.ReservedBills.Any())
+        {
+            <p class="muted">Nothing reserved right now.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in Summary.ReservedBills)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">DELAYED</span><h2>Waiting on income to arrive</h2></div></div>
+        @if (!Summary.DelayedBills.Any())
+        {
+            <p class="muted">Nothing waiting on income right now.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in Summary.DelayedBills)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">INCOME</span><h2>Income timeline</h2></div><button class="button magic small" @onclick="() => ShowIncomeForm = !ShowIncomeForm">＋ Add income</button></div>
+        @if (ShowIncomeForm)
+        {
+            <div class="form-grid">
+                <label>Source<input @bind="IncomeDraft.Source" placeholder="ByteForza paycheck" /></label>
+                <label>Owner<select @bind="IncomeDraft.Owner"><option>Trey</option><option>Jess</option><option>Shared</option></select></label>
+                <label>Net amount<input type="number" step=".01" @bind="IncomeDraft.NetAmount" /></label>
+                <label>Expected date<input type="date" @bind="IncomeDraft.ExpectedDate" /></label>
+                <label>Pay period start<input type="date" @bind="IncomeDraft.PayPeriodStart" /></label>
+                <label>Pay period end<input type="date" @bind="IncomeDraft.PayPeriodEnd" /></label>
+                <label>Status<select @bind="IncomeDraft.Status">
+                    <option value="@IncomeStatus.Estimated">Estimated</option>
+                    <option value="@IncomeStatus.Pending">Pending</option>
+                    <option value="@IncomeStatus.Received">Received</option>
+                </select></label>
+            </div>
+            <div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(IncomeDraft.Source))" @onclick="SaveIncome">Save income</button><button class="text-button" @onclick="() => { ShowIncomeForm = false; IncomeDraft = new(); }">Cancel</button></div>
+        }
+        @if (!Store.Data.IncomeEvents.Any())
+        {
+            <p class="muted">No income logged yet.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var income in Store.Data.IncomeEvents.OrderBy(x => x.ExpectedDate))
+                {
+                    var waitingCount = Store.Data.Bills.Count(x => x.IsActive && x.ManualStatus == BillStatus.Delayed && x.LinkedIncomeEventId == income.Id);
+                    <div class="bill-row">
+                        <span class="bill-dot @(income.Status == IncomeStatus.Received ? "fixed" : "transfer")"></span>
+                        <div class="bill-info"><strong>@income.Source</strong><small>@income.Owner · @income.ExpectedDate.ToString("MMM d") · @income.Status @(waitingCount > 0 ? $"· {waitingCount} bill(s) waiting" : "")</small></div>
+                        <b>@income.NetAmount.ToString("C")</b>
+                        <span class="row-actions">
+                            @if (income.Status != IncomeStatus.Received)
+                            { <button class="button magic small" @onclick="() => MarkIncomeReceived(income)">Mark received</button> }
+                            <button class="icon-button" title="Remove" @onclick="() => DeleteIncome(income)">×</button>
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">DEBT</span><h2>Debt payments</h2></div></div>
+        @{ var debtBills = Store.Data.Bills.Where(x => x.IsActive && x.Category == BillCategory.DebtPayment).OrderBy(x => x.DueDay).ToList(); }
+        @if (!debtBills.Any())
+        {
+            <p class="muted">No debt payments yet.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in debtBills)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">NEEDS REVIEW</span><h2>Imported transactions we couldn't match</h2></div></div>
+        @if (!Summary.NeedsReviewTransactions.Any())
+        {
+            <p class="muted">Nothing needs review.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var transaction in Summary.NeedsReviewTransactions)
+                {
+                    <div class="bill-row">
+                        <span class="bill-dot fixed"></span>
+                        <div class="bill-info"><strong>@transaction.Description</strong><small>@transaction.Date.ToString("MMM d") · @transaction.Account</small></div>
+                        <span class="badge status-review">Needs review</span>
+                        <b>@transaction.Amount.ToString("C")</b>
+                        <span class="row-actions">
+                            <select @onchange="e => LinkTransaction(transaction, e.Value)">
+                                <option value="">Link to a bill…</option>
+                                @foreach (var bill in Store.Data.Bills.Where(x => x.IsActive))
+                                { <option value="@bill.Id">@bill.Name</option> }
+                            </select>
+                            <button class="text-button" @onclick="() => ResolveReview(transaction)">Resolve</button>
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="panel" style="margin-top:24px">
+        <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / cycle</small></b></div>
+        @foreach (var group in Groups)
+        {
+            <div class="bill-group">
+                <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span></div><b>@group.Total.ToString("C")</b></div>
+                @if (!group.Bills.Any())
+                {
+                    <p class="muted">Nothing in this category yet.</p>
+                }
+                else
+                {
+                    <div class="bill-list">
+                        @foreach (var bill in group.Bills)
+                        { @BillRow(bill) }
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="panel upload-panel">
+        <div class="panel-head"><div><span class="kicker">HOUSEHOLD INBOX</span><h2>Drop anything here</h2><p class="muted">Receipts, lease docs, loan paperwork — whatever needs a home.</p></div></div>
+        <div class="upload-controls">
+            <input @bind="UploadNote" @bind:event="oninput" placeholder="What is this? (optional note)" />
+            <label class="button primary upload-button">@(IsUploading ? "Uploading…" : "Choose file")<InputFile OnChange="UploadFile" disabled="@IsUploading" /></label>
         </div>
-    }
-</section>
+        @if (Store.Data.UploadedFiles.Count > 0)
+        {
+            <div class="upload-list">
+                @foreach (var file in Store.Data.UploadedFiles.OrderByDescending(x => x.UploadedAt))
+                {
+                    <div class="upload-row">
+                        <a href="/uploads/@file.Id" target="_blank">@file.FileName</a>
+                        <small>@(string.IsNullOrWhiteSpace(file.Note) ? "" : file.Note + " · ")@(file.SizeBytes / 1024) KB · @file.UploadedAt.ToLocalTime().ToString("MMM d")</small>
+                        <button class="delete-button" title="Remove" @onclick="() => DeleteUpload(file.Id)">×</button>
+                    </div>
+                }
+            </div>
+        }
+    </section>
 
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">NEEDS REVIEW</span><h2>Imported transactions we couldn't match</h2></div></div>
-    @if (!Summary.NeedsReviewTransactions.Any())
+    <section class="panel goal-panel">
+        @if (Goal is null || EditingGoal)
+        {
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
+            <div class="form-grid">
+                <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
+                <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
+                <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
+            </div>
+            <div class="form-actions">
+                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
+                @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
+            </div>
+        }
+        else
+        {
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
+            <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
+            <div class="progress"><i style="width:@GoalPercent%"></i></div>
+            <p>@GoalPercent% there. Every bit counts.</p>
+            <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
+        }
+    </section>
+
+    <aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
+}
+else
+{
+    <div class="form-actions" style="margin-bottom:20px">
+        <button class="button magic" @onclick="() => ShowRocketImport = !ShowRocketImport">🚀 Rocket Money import</button>
+    </div>
+
+    @if (ShowRocketImport)
     {
-        <p class="muted">Nothing needs review.</p>
+        <section class="panel rocket-import">
+            <div class="rocket-copy"><span class="rocket-mark">🚀</span><div><span class="kicker">ROCKET MONEY IMPORT</span><h2>Update from your real accounts</h2><p>Transfers, card payments, savings moves, and investments are excluded so they aren’t counted twice.</p></div></div>
+            <div class="import-controls">
+                <label>Assign this export to<select @bind="ImportOwner"><option>Me</option><option>Jess</option><option>Shared</option></select></label>
+                <label class="check-label"><input type="checkbox" @bind="ReplaceTransactions" /> Replace current transactions</label>
+                <label class="button magic upload-button">@(IsImporting ? "Importing…" : "Choose Rocket CSV")<InputFile OnChange="ImportRocket" accept=".csv,text/csv" disabled="@IsImporting" /></label>
+            </div>
+        </section>
     }
-    else
+
+    @if (!string.IsNullOrWhiteSpace(ImportError)) { <div class="import-message error">@ImportError</div> }
+    @if (RocketResult is not null)
     {
-        <div class="bill-list">
-            @foreach (var transaction in Summary.NeedsReviewTransactions)
-            {
-                <div class="bill-row">
-                    <span class="bill-dot fixed"></span>
-                    <div class="bill-info"><strong>@transaction.Description</strong><small>@transaction.Date.ToString("MMM d") · @transaction.Account</small></div>
-                    <span class="badge status-review">Needs review</span>
-                    <b>@transaction.Amount.ToString("C")</b>
-                    <span class="row-actions">
-                        <select @onchange="e => LinkTransaction(transaction, e.Value)">
-                            <option value="">Link to a bill…</option>
-                            @foreach (var bill in Store.Data.Bills.Where(x => x.IsActive))
-                            { <option value="@bill.Id">@bill.Name</option> }
-                        </select>
-                        <button class="text-button" @onclick="() => ResolveReview(transaction)">Resolve</button>
-                    </span>
-                </div>
-            }
+        <div class="import-message success"><strong>✓ Rocket Money is up to date</strong><span>@RocketResult.Imported.ToString("N0") transactions imported · @RocketResult.ExcludedTransfers.ToString("N0") transfers excluded · @RocketResult.AccountCount accounts · @RocketResult.EarliestDate?.ToString("MMM yyyy")–@RocketResult.LatestDate?.ToString("MMM yyyy")</span></div>
+    }
+
+    @if (ShowTxForm)
+    {
+        <section class="panel form-panel" id="add">
+            <div class="panel-head"><h2>@(EditingTxId is null ? "New transaction" : "Edit transaction")</h2><button class="icon-button" @onclick="CloseTxForm">×</button></div>
+            <div class="form-grid">
+                <label>Description<input @bind="TxDraft.Description" placeholder="Coffee, rent, paycheck…" /></label>
+                <label>Amount<input type="number" step="0.01" @bind="TxDraft.Amount" /></label>
+                <label>Category<select @bind="TxDraft.Category">@foreach (var c in Categories) { <option>@c</option> }</select></label>
+                <label>Who?<select @bind="TxDraft.Owner"><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+                <label>Date<input type="date" @bind="TxDraft.Date" /></label>
+                <label class="check-label"><input type="checkbox" @bind="TxDraft.IsIncome" /> This is income</label>
+                @if (EditingTxId is null)
+                {
+                    <label class="check-label"><input type="checkbox" @bind="MakeRecurring" /> Repeat monthly</label>
+                    @if (MakeRecurring) { <label>Post on day<input type="number" min="1" max="28" @bind="RecurringDay" /></label> }
+                }
+            </div>
+            <div class="form-actions">
+                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(TxDraft.Description) || TxDraft.Amount <= 0)" @onclick="SaveTransaction">@(EditingTxId is null ? "Save transaction" : "Update transaction")</button>
+                <button class="text-button" @onclick="ClearTxForm">Clear</button>
+            </div>
+        </section>
+    }
+
+    <section class="stat-grid compact">
+        <div class="stat-card sage"><span>Income</span><strong>@TxIncome.ToString("C")</strong></div>
+        <div class="stat-card peach"><span>Spent</span><strong>@TxSpending.ToString("C")</strong></div>
+        <div class="stat-card butter"><span>Remaining</span><strong>@((TxIncome - TxSpending).ToString("C"))</strong></div>
+        <div class="stat-card lilac"><span>Shared spending</span><strong>@TxShared.ToString("C")</strong></div>
+    </section>
+
+    <section class="transaction-browser">
+        <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction gallery</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div><div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div></div>
+
+        <div class="filter-panel panel">
+            <label class="search-filter"><span>⌕</span><input @bind="SearchQuery" @bind:event="oninput" placeholder="Search merchant, description, category…" /></label>
+            <label>When<select @bind="DateFilter"><option>This month</option><option>Last 90 days</option><option>This year</option><option>All history</option></select></label>
+            <label>Category<select @bind="CategoryFilter"><option>All categories</option>@foreach (var category in AvailableCategories) { <option>@category</option> }</select></label>
+            <label>Account<select @bind="AccountFilter"><option>All accounts</option>@foreach (var account in AvailableAccounts) { <option>@account</option> }</select></label>
+            <label>Flow<select @bind="TypeFilter"><option>Everything</option><option>Expenses</option><option>Income & refunds</option></select></label>
+            <label>Owner<select @bind="OwnerFilter"><option>Everyone</option><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+            <label>Sort<select @bind="SortFilter"><option>Newest first</option><option>Oldest first</option><option>Highest amount</option><option>Lowest amount</option></select></label>
+            <label class="review-toggle"><input type="checkbox" @bind="OnlyReview" /><span><strong>✦ Needs review</strong><small>Unusual, uncategorized, fees, and refunds</small></span></label>
+            <button class="text-button clear-filters" @onclick="ResetFilters">Clear filters</button>
         </div>
-    }
-</section>
 
-<section class="panel" style="margin-top:24px">
-    <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / cycle</small></b></div>
-    @foreach (var group in Groups)
-    {
-        <div class="bill-group">
-            <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span></div><b>@group.Total.ToString("C")</b></div>
-            @if (!group.Bills.Any())
+        @if (!VisibleTransactions.Any())
+        { <div class="empty-state"><span>⌕</span><h2>No matching transactions</h2><p>Try clearing a filter or widening the date range.</p></div> }
+        else
+        {
+            <div class="transaction-gallery">
+            @foreach (var item in VisibleTransactions)
             {
-                <p class="muted">Nothing in this category yet.</p>
+                var reviewReason = ReviewReason(item);
+                <article class="transaction-album @(item.IsIncome ? "income-album" : "")">
+                    <div class="album-art @CategoryClass(item.Category)"><span>@CategoryIcon(item.Category, item.IsIncome)</span><small>@item.Date.ToString("MMM")</small><strong>@item.Date.Day</strong>@if (reviewReason is not null) { <b class="review-sticker">@reviewReason</b> }</div>
+                    <div class="album-details"><span class="kicker">@item.Category</span><h3>@item.Description</h3><div class="album-meta"><span>@item.Owner</span>@if (!string.IsNullOrWhiteSpace(item.Account)) { <span>@item.Account</span> }</div><div class="album-footer"><strong class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</strong><span class="row-actions"><button title="Edit transaction" class="icon-button" @onclick="() => EditTransaction(item)">✎</button><button title="Remove transaction" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></span></div></div>
+                </article>
             }
-            else
-            {
-                <div class="bill-list">
-                    @foreach (var bill in group.Bills)
-                    { @BillRow(bill) }
-                </div>
-            }
-        </div>
-    }
-</section>
+            </div>
+            @if (VisibleCount < FilteredCount) { <button class="button load-more" @onclick="() => VisibleCount += 60">Show 60 more</button> }
+        }
+    </section>
 
-<aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
+    <section class="panel automation-panel">
+        <div class="panel-head"><div><span class="kicker">RUNNING QUIETLY</span><h2>Monthly automations</h2></div><span class="auto-badge">✦ @Store.Data.RecurringTransactions.Count(x => x.IsActive) active</span></div>
+        @if (!Store.Data.RecurringTransactions.Any()) { <p class="muted">Mark a transaction “Repeat monthly” and it will show up here.</p> }
+        @foreach (var rule in Store.Data.RecurringTransactions)
+        { <div class="activity-row"><span class="category-icon">↻</span><div><strong>@rule.Description</strong><small>Posts on day @rule.DayOfMonth · @rule.Owner</small></div><b>@rule.Amount.ToString("C")</b></div> }
+    </section>
+
+    <section class="panel wish-preview">
+        <div><span class="kicker">PLAN IT, DON'T IMPULSE-BUY IT</span><h2>Shopping tracker</h2><p>Save tech, clothes, shoes, and home ideas—then see what fits the plan.</p></div>
+        <div class="wish-preview-total"><strong>@Store.Data.PurchaseIdeas.Sum(x => x.Price).ToString("C0")</strong><small>across @Store.Data.PurchaseIdeas.Count ideas</small></div>
+        <a class="button magic" href="shopping-tracker">Open shopping tracker →</a>
+    </section>
+}
 
 @code {
+    string Tab = "Overview";
+
     RenderFragment BillRow(Bill bill) => @<div class="bill-row @(bill.EffectiveStatus(DateTime.Today) == BillStatus.Paid ? "bill-paid" : "")">
         <span class="bill-dot @bill.Category.CssClass()"></span>
         <div class="bill-info">
@@ -364,11 +527,15 @@
     CashflowWindow SelectedWindow = CashflowWindow.UntilNextPaycheck;
     DateTime CustomDate = DateTime.Today;
 
-    protected override void OnInitialized() => FundsDraft = new()
+    protected override void OnInitialized()
     {
-        Trey = Store.Data.Funds.Trey, Jess = Store.Data.Funds.Jess,
-        Shared = Store.Data.Funds.Shared, Buffer = Store.Data.Funds.Buffer
-    };
+        FundsDraft = new()
+        {
+            Trey = Store.Data.Funds.Trey, Jess = Store.Data.Funds.Jess,
+            Shared = Store.Data.Funds.Shared, Buffer = Store.Data.Funds.Buffer
+        };
+        CalculateReviewThreshold();
+    }
 
     CashflowSummary Summary => Cashflow.BuildSummary(SelectedWindow, CustomDate);
 
@@ -472,5 +639,176 @@
         if (string.IsNullOrWhiteSpace(text) || !Guid.TryParse(text, out var billId)) return;
         await Store.LinkTransactionToBillAsync(transaction.Id, billId);
         StatusMessage = "Linked transaction to bill.";
+    }
+
+    SavingsGoal? Goal => Store.Data.SavingsGoals.FirstOrDefault();
+    SavingsGoal GoalDraft = new();
+    bool EditingGoal;
+    int GoalPercent => Goal is null || Goal.Target == 0 ? 0 : (int)Math.Min(100, Goal.Current / Goal.Target * 100);
+    void StartEditGoal() { if (Goal is not null) { GoalDraft = new() { Id = Goal.Id, Name = Goal.Name, Current = Goal.Current, Target = Goal.Target }; EditingGoal = true; } }
+    async Task SaveGoal()
+    {
+        if (Goal is { } existing) { existing.Name = GoalDraft.Name; existing.Current = GoalDraft.Current; existing.Target = GoalDraft.Target; }
+        else { Store.Data.SavingsGoals.Add(GoalDraft); }
+        await Store.SaveAsync();
+        GoalDraft = new();
+        EditingGoal = false;
+    }
+
+    string UploadNote = "";
+    bool IsUploading;
+    async Task UploadFile(InputFileChangeEventArgs args)
+    {
+        IsUploading = true;
+        try
+        {
+            await using var stream = args.File.OpenReadStream(50 * 1024 * 1024);
+            await Store.SaveUploadAsync(stream, args.File.Name, args.File.ContentType, UploadNote);
+            UploadNote = "";
+        }
+        finally { IsUploading = false; }
+    }
+    async Task DeleteUpload(Guid id) => await Store.DeleteUploadAsync(id);
+
+    bool ShowRocketImport;
+    Transaction TxDraft = new();
+    bool ShowTxForm;
+    bool MakeRecurring;
+    bool ReplaceTransactions = true, IsImporting;
+    string ImportOwner = "Me", ImportError = "";
+    RocketImportResult? RocketResult;
+    int RecurringDay = DateTime.Today.Day;
+    string OwnerFilter = "Everyone", SearchQuery = "", DateFilter = "This month", CategoryFilter = "All categories", AccountFilter = "All accounts", TypeFilter = "Everything", SortFilter = "Newest first";
+    bool OnlyReview;
+    int VisibleCount = 60;
+    decimal LargeExpenseThreshold = 500;
+    string[] Categories = ["Other", "Groceries", "Bills", "Dining", "Home", "Fun", "Transport", "Income"];
+    IEnumerable<Transaction> Month => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year);
+    IEnumerable<string> AvailableCategories => Store.Data.Transactions.Select(x => x.Category).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<string> AvailableAccounts => Store.Data.Transactions.Select(x => x.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<Transaction> FilteredTransactions
+    {
+        get
+        {
+            var today = DateTime.Today;
+            IEnumerable<Transaction> query = Store.Data.Transactions;
+            query = DateFilter switch
+            {
+                "This month" => query.Where(x => x.Date.Year == today.Year && x.Date.Month == today.Month),
+                "Last 90 days" => query.Where(x => x.Date >= today.AddDays(-90)),
+                "This year" => query.Where(x => x.Date.Year == today.Year),
+                _ => query
+            };
+            if (!string.IsNullOrWhiteSpace(SearchQuery)) query = query.Where(x => $"{x.Description} {x.Category} {x.Account} {x.Institution}".Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+            if (CategoryFilter != "All categories") query = query.Where(x => x.Category == CategoryFilter);
+            if (AccountFilter != "All accounts") query = query.Where(x => x.Account == AccountFilter);
+            if (OwnerFilter != "Everyone") query = query.Where(x => x.Owner == OwnerFilter);
+            if (TypeFilter == "Expenses") query = query.Where(x => !x.IsIncome);
+            if (TypeFilter == "Income & refunds") query = query.Where(x => x.IsIncome);
+            if (OnlyReview) query = query.Where(x => ReviewReason(x) is not null);
+            return SortFilter switch
+            {
+                "Oldest first" => query.OrderBy(x => x.Date),
+                "Highest amount" => query.OrderByDescending(x => x.Amount),
+                "Lowest amount" => query.OrderBy(x => x.Amount),
+                _ => query.OrderByDescending(x => x.Date).ThenByDescending(x => x.Amount)
+            };
+        }
+    }
+    int FilteredCount => FilteredTransactions.Count();
+    IEnumerable<Transaction> VisibleTransactions => FilteredTransactions.Take(VisibleCount);
+    decimal TxIncome => Month.Where(x => x.IsIncome).Sum(x => x.Amount);
+    decimal TxSpending => Month.Where(x => !x.IsIncome).Sum(x => x.Amount);
+    decimal TxShared => Month.Where(x => !x.IsIncome && x.Owner == "Shared").Sum(x => x.Amount);
+    Guid? EditingTxId;
+    Transaction? LastRemoved;
+    int LastRemovedIndex = -1;
+    void OpenAddTxForm() { TxDraft = new(); EditingTxId = null; MakeRecurring = false; ShowTxForm = true; }
+    void ClearTxForm() { var keepEditing = EditingTxId; TxDraft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; EditingTxId = keepEditing; }
+    void CloseTxForm() { ShowTxForm = false; EditingTxId = null; }
+    void EditTransaction(Transaction item)
+    {
+        EditingTxId = item.Id;
+        TxDraft = new Transaction { Id = item.Id, Description = item.Description, Category = item.Category, Owner = item.Owner, Amount = item.Amount, IsIncome = item.IsIncome, Date = item.Date, Account = item.Account, Institution = item.Institution, Source = item.Source, SourceKey = item.SourceKey, RecurringRuleId = item.RecurringRuleId };
+        ShowTxForm = true;
+    }
+    async Task SaveTransaction()
+    {
+        LastRemoved = null;
+        if (EditingTxId is Guid id)
+        {
+            var existing = Store.Data.Transactions.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Description = TxDraft.Description; existing.Category = TxDraft.Category; existing.Owner = TxDraft.Owner;
+                existing.Amount = TxDraft.Amount; existing.IsIncome = TxDraft.IsIncome; existing.Date = TxDraft.Date;
+            }
+            StatusMessage = $"Updated \"{TxDraft.Description}\".";
+        }
+        else
+        {
+            Store.Data.Transactions.Add(TxDraft);
+            if (MakeRecurring) Store.Data.RecurringTransactions.Add(new() { Description = TxDraft.Description, Category = TxDraft.Category, Owner = TxDraft.Owner, Amount = TxDraft.Amount, IsIncome = TxDraft.IsIncome, DayOfMonth = RecurringDay });
+            StatusMessage = $"Added \"{TxDraft.Description}\" — {(TxDraft.IsIncome ? "+" : "-")}{TxDraft.Amount:C}.";
+        }
+        await Store.SaveAsync();
+        CalculateReviewThreshold();
+        TxDraft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; ShowTxForm = false; EditingTxId = null;
+    }
+    async Task UndoLastTx()
+    {
+        if (LastRemoved is not null)
+        {
+            Store.Data.Transactions.Insert(Math.Min(LastRemovedIndex, Store.Data.Transactions.Count), LastRemoved);
+            LastRemoved = null;
+            await Store.SaveAsync();
+        }
+        StatusMessage = "";
+    }
+    void CalculateReviewThreshold()
+    {
+        var values = Store.Data.Transactions.Where(x => !x.IsIncome).Select(x => x.Amount).OrderBy(x => x).ToList();
+        if (values.Count > 0) LargeExpenseThreshold = Math.Max(250, values[(int)Math.Floor((values.Count - 1) * .95)]);
+    }
+    string? ReviewReason(Transaction item)
+    {
+        if (item.Category.Equals("Uncategorized", StringComparison.OrdinalIgnoreCase)) return "Needs category";
+        if (item.Category.Equals("Fees", StringComparison.OrdinalIgnoreCase)) return "Fee spotted";
+        if (item.IsIncome && !item.Category.Equals("Income", StringComparison.OrdinalIgnoreCase)) return "Refund / credit";
+        if (!item.IsIncome && item.Amount >= LargeExpenseThreshold) return "Top 5% amount";
+        return null;
+    }
+    void ResetFilters() { SearchQuery = ""; DateFilter = "This month"; CategoryFilter = "All categories"; AccountFilter = "All accounts"; TypeFilter = "Everything"; OwnerFilter = "Everyone"; SortFilter = "Newest first"; OnlyReview = false; VisibleCount = 60; }
+    static string CategoryClass(string category) => $"cat-{new string(category.ToLowerInvariant().Where(char.IsLetterOrDigit).Take(12).ToArray())}";
+    static string CategoryIcon(string category, bool income) => income ? "↗" : category switch { "Groceries" => "🛒", "Dining & Drinks" => "☕", "Shopping" => "✦", "Bills & Utilities" => "⌁", "Software & Tech" => "⌘", "Auto & Transport" => "◆", "Entertainment & Rec." => "♪", "Fees" => "!", "Uncategorized" => "?", _ => "•" };
+    async Task DeleteTransaction(Transaction item)
+    {
+        LastRemovedIndex = Store.Data.Transactions.IndexOf(item);
+        LastRemoved = item;
+        Store.Data.Transactions.Remove(item);
+        CalculateReviewThreshold();
+        await Store.SaveAsync();
+        StatusMessage = $"Removed \"{item.Description}\".";
+    }
+    async Task ImportRocket(InputFileChangeEventArgs args)
+    {
+        ImportError = ""; RocketResult = null; IsImporting = true;
+        try
+        {
+            if (!args.File.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) { ImportError = "Please choose the CSV exported by Rocket Money."; return; }
+            await using var upload = args.File.OpenReadStream(20 * 1024 * 1024);
+            using var buffered = new MemoryStream((int)args.File.Size);
+            await upload.CopyToAsync(buffered);
+            buffered.Position = 0;
+            RocketResult = await Store.ImportRocketCsvAsync(buffered, ImportOwner, ReplaceTransactions);
+            CalculateReviewThreshold();
+            if (RocketResult.Imported == 0) ImportError = "No new transactions were found in that export.";
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger("RocketMoneyImport").LogError(ex, "Rocket Money CSV import failed");
+            ImportError = $"Import failed ({ex.GetType().Name}): {ex.Message}";
+        }
+        finally { IsImporting = false; }
     }
 }

@@ -2,7 +2,7 @@
 @inject HouseholdStore Store
 @inject HomeButlerService ButlerService
 
-<PageTitle>Home Butler — Bat House</PageTitle>
+<PageTitle>Home Butler — Manor</PageTitle>
 <section class="page-heading"><div><span class="kicker">YOUR OWN LLM, NO TOKENS BURNED</span><h1>Home Butler</h1><p>Point this at your local Qwen/Ollama server so day-to-day smart features run for free instead of spending Claude or OpenAI credits.</p></div></section>
 
 <section class="panel form-panel">
@@ -23,7 +23,7 @@
 
 <section class="panel">
     <div class="panel-head"><h2>What this powers right now</h2></div>
-    <p class="muted">The <a href="wishboard">wishboard</a> tries Home Butler as a free fallback when a pasted product
+    <p class="muted">The <a href="shopping-tracker">Shopping Tracker</a> tries Home Butler as a free fallback when a pasted product
         link doesn't have enough embedded data for direct parsing, before ever reaching for a paid API.</p>
     <p class="muted" style="margin-top:10px"><strong>Status:</strong> @(ButlerService.IsConfigured ? "Configured — base URL is set." : "Not configured yet — add a base URL above.")</p>
     @if (ButlerService.IsConfigured)

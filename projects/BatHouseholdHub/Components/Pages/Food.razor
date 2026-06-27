@@ -1,8 +1,8 @@
-@page "/food"
+@page "/groceries-tracker"
 @inject HouseholdStore Store
 
-<PageTitle>Food Plan — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">WHAT'S FOR DINNER?</span><h1>Food plan</h1><p>Plan the week, keep favorite recipes, and carry one tidy list to the store.</p></div><div class="button-group"><button class="button magic" @onclick="AutoPlanWeek">✦ Plan my week</button><button class="button primary" @onclick="() => ShowRecipe = !ShowRecipe">＋ New recipe</button></div></section>
+<PageTitle>Groceries Tracker — Manor</PageTitle>
+<section class="page-heading"><div><span class="kicker">WHAT'S FOR DINNER?</span><h1>Groceries tracker</h1><p>Plan the week, keep favorite recipes, and carry one tidy list to the store.</p></div><div class="button-group"><button class="button magic" @onclick="AutoPlanWeek">✦ Plan my week</button><button class="button primary" @onclick="() => ShowRecipe = !ShowRecipe">＋ New recipe</button></div></section>
 
 @if (!string.IsNullOrWhiteSpace(StatusMessage)) { <div class="success-toast">✓ @StatusMessage</div> }
 

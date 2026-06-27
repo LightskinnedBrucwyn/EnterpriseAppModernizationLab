@@ -1,11 +1,33 @@
-@page "/wishboard"
+@page "/shopping-tracker"
 @inject HouseholdStore Store
 @inject ProductLookupService Lookup
 @inject OpenGraphScraperService Scraper
 @inject HomeButlerService Butler
 
-<PageTitle>Wishboard — Bat House</PageTitle>
-<section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Purchase wishboard</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="OpenAddForm">＋ Save an idea</button></section>
+<PageTitle>Shopping Tracker — Manor</PageTitle>
+<section class="page-heading"><div><span class="kicker">DREAM IT, PRICE IT, PLAN IT</span><h1>Shopping tracker</h1><p>A calm place for things you might buy—before they become surprise spending.</p></div><button class="button primary" @onclick="OpenAddForm">＋ Save an idea</button></section>
+
+<section class="panel">
+    <div class="panel-head"><div><span class="kicker">FAVE SHOPPING</span><h2>Quick shopping tabs</h2><p class="muted">One click to a go-to store — opens in a new tab.</p></div><button class="icon-button" title="Add a site" @onclick="() => ShowSiteForm = !ShowSiteForm">＋</button></div>
+    <div class="site-tabs">
+        @foreach (var site in Store.Data.ShoppingSites)
+        {
+            <a class="site-tab" target="_blank" href="@site.Url">@site.Name<button class="delete-button" title="Remove" @onclick:preventDefault @onclick:stopPropagation @onclick="() => DeleteSite(site.Id)">×</button></a>
+        }
+    </div>
+    @if (ShowSiteForm)
+    {
+        <div class="form-grid">
+            <label>Site name<input @bind="NewSiteName" placeholder="e.g. Nordstrom" /></label>
+            <label class="wide">Link<input @bind="NewSiteUrl" placeholder="https://…" /></label>
+            <label>For whom?<select @bind="NewSiteOwner"><option>Jess</option><option>Me</option><option>Shared</option></select></label>
+        </div>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(NewSiteName) || !IsWebUrl(NewSiteUrl))" @onclick="AddSite">Add tab</button>
+            <button class="text-button" @onclick="() => ShowSiteForm = false">Cancel</button>
+        </div>
+    }
+</section>
 
 <section class="search-window panel">
     <span class="search-icon">⌕</span><input @bind="Search" @bind:event="oninput" placeholder="Search your saved tech, shoes, clothes…" />
@@ -40,7 +62,7 @@
             <label class="wide">Notes<textarea @bind="Draft.Notes" placeholder="Why we want it, size, color, alternatives…"></textarea></label>
         </div>
         <div class="form-actions">
-            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveIdea">@(EditingId is null ? "Add to wishboard" : "Update idea")</button>
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveIdea">@(EditingId is null ? "Add to tracker" : "Update idea")</button>
             <button class="text-button" @onclick="ClearForm">Clear</button>
         </div>
     </section>
@@ -135,7 +157,7 @@ else
         else
         {
             Store.Data.PurchaseIdeas.Add(Draft);
-            StatusMessage = $"Added \"{Draft.Name}\" to the wishboard.";
+            StatusMessage = $"Added \"{Draft.Name}\" to the shopping tracker.";
         }
         await Store.SaveAsync();
         Draft = new(); ShowForm = false; EditingId = null;
@@ -224,4 +246,14 @@ else
         var name = host.Replace("www.", "", StringComparison.OrdinalIgnoreCase).Split('.')[0];
         return $"Find from {char.ToUpperInvariant(name[0])}{name[1..]}";
     }
+
+    bool ShowSiteForm;
+    string NewSiteName = "", NewSiteUrl = "", NewSiteOwner = "Jess";
+    async Task AddSite()
+    {
+        await Store.AddShoppingSiteAsync(NewSiteName, NewSiteUrl, NewSiteOwner);
+        NewSiteName = ""; NewSiteUrl = ""; NewSiteOwner = "Jess";
+        ShowSiteForm = false;
+    }
+    async Task DeleteSite(Guid id) => await Store.DeleteShoppingSiteAsync(id);
 }

@@ -27,6 +27,7 @@ builder.Services.AddServerSideBlazor(options =>
 builder.Services.AddSingleton<HouseholdStore>();
 builder.Services.AddScoped<CashflowService>();
 builder.Services.AddScoped<BillCalendarService>();
+builder.Services.AddScoped<ActivePersonService>();
 builder.Services.AddHostedService<RecurringTransactionService>();
 builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddHttpClient<OpenGraphScraperService>();

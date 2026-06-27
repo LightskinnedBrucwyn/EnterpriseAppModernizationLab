@@ -1,12 +1,22 @@
-<div class="brand"><span class="brand-mark theme-icon"><span class="ic-light">🐈‍⬛</span><span class="ic-dark">🦇</span></span><div><strong>Bat House</strong><small>household hub</small></div></div>
-<nav>
-    <NavLink href="" Match="NavLinkMatch.All"><span class="theme-icon"><span class="ic-light">🐱</span><span class="ic-dark">🦇</span></span> Today</NavLink>
-    <NavLink href="finances"><span>💰</span> Money</NavLink>
-    <NavLink href="bills"><span>🏠</span> Bills</NavLink>
-    <NavLink href="calendar"><span>📅</span> Calendar</NavLink>
-    <NavLink href="wishboard"><span>🐾</span> Wishboard</NavLink>
-    <NavLink href="food"><span>🍽</span> Food plan</NavLink>
-    <NavLink href="butler"><span>🤵</span> Home Butler</NavLink>
-    <a href="https://app.rocketmoney.com/" target="_blank"><span>🚀</span> Rocket Money</a>
-</nav>
-<div class="sidebar-note"><span class="theme-icon"><span class="ic-light">🐾</span><span class="ic-dark">🦇</span></span><strong>Little steps add up.</strong><small>Your household data stays on Batserver.</small></div>
+@inject ActivePersonService ActivePerson
+
+<header class="topnav">
+    <a class="brand" href="">
+        <span class="brand-mark">M</span>
+        <div><strong>Manor</strong><small>HOUSEHOLD HUB</small></div>
+    </a>
+    <nav>
+        <NavLink href="bills">Bills</NavLink>
+        <NavLink href="calendar">Calendar</NavLink>
+        <NavLink href="shopping-tracker">Shopping Tracker</NavLink>
+        <NavLink href="groceries-tracker">Groceries Tracker</NavLink>
+        <NavLink href="butler">Home Butler</NavLink>
+    </nav>
+    <div class="topnav-right">
+        <a class="nav-search" href="shopping-tracker" title="Search">⌕</a>
+        <div class="avatar-pair">
+            <button class="avatar-m @(ActivePerson.Current == "Trey" ? "active" : "")" title="Trey's view" @onclick='() => ActivePerson.SetActive("Trey")'>M</button>
+            <button class="avatar-j @(ActivePerson.Current == "Jess" ? "active" : "")" title="Jess's view" @onclick='() => ActivePerson.SetActive("Jess")'>J</button>
+        </div>
+    </div>
+</header>

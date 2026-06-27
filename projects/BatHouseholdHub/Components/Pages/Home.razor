@@ -1,263 +1,49 @@
 @page "/"
-@inject HouseholdStore Store
+@inject ActivePersonService ActivePerson
 
-<PageTitle>Bat House — Today</PageTitle>
+<PageTitle>Manor Household Hub</PageTitle>
 
-<section class="panel upload-panel">
-    <div class="panel-head"><div><span class="kicker">HOUSEHOLD INBOX</span><h2>Drop anything here</h2><p class="muted">Receipts, lease docs, loan paperwork — whatever needs a home.</p></div></div>
-    <div class="upload-controls">
-        <input @bind="UploadNote" @bind:event="oninput" placeholder="What is this? (optional note)" />
-        <label class="button primary upload-button">@(IsUploading ? "Uploading…" : "Choose file")<InputFile OnChange="UploadFile" disabled="@IsUploading" /></label>
-    </div>
-    @if (Store.Data.UploadedFiles.Count > 0)
-    {
-        <div class="upload-list">
-            @foreach (var file in Store.Data.UploadedFiles.OrderByDescending(x => x.UploadedAt))
-            {
-                <div class="upload-row">
-                    <a href="/uploads/@file.Id" target="_blank">@file.FileName</a>
-                    <small>@(string.IsNullOrWhiteSpace(file.Note) ? "" : file.Note + " · ")@(file.SizeBytes / 1024) KB · @file.UploadedAt.ToLocalTime().ToString("MMM d")</small>
-                    <button class="delete-button" title="Remove" @onclick="() => DeleteUpload(file.Id)">×</button>
-                </div>
-            }
-        </div>
-    }
+<section class="page-heading">
+    <div><span class="kicker">@DateTime.Now.ToString("dddd, MMMM d")</span><h1>Good @(TimeOfDay), <em>@(ActivePerson.Current)</em>.</h1><p>Pick a spot to land — everything's one tap away.</p></div>
 </section>
 
-<section class="hero">
-    <div class="hero-blob" aria-hidden="true"></div>
-    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1 class="hashtag-hero">#GoodJobTreyAndJess</h1><p>Here’s the gentle little snapshot of home today.</p></div>
-    <div class="hero-side">
-        <button class="button magic" @onclick="() => ShowPaycheckForm = !ShowPaycheckForm">💰 Log paycheck</button>
-        <a class="button primary" href="finances#add">＋ Add transaction</a>
-        <span class="organic-sticker" aria-hidden="true">ORGANIC</span>
-    </div>
+<section class="menu-grid">
+    <a class="menu-card" href="bills">
+        <span class="menu-icon sage">💵</span>
+        <div><h2>Bills &amp; Money</h2><p>Track spending, log income, manage bills, import from Rocket Money.</p></div>
+    </a>
+    <a class="menu-card" href="calendar">
+        <span class="menu-icon peach">📅</span>
+        <div><h2>Calendar</h2><p>See what's due and when across the month.</p></div>
+    </a>
+    <a class="menu-card" href="shopping-tracker">
+        <span class="menu-icon butter">🛍️</span>
+        <div><h2>Shopping Tracker</h2><p>Wishlist items, fave stores, and quick product search.</p></div>
+    </a>
+    <a class="menu-card" href="groceries-tracker">
+        <span class="menu-icon lilac">🥬</span>
+        <div><h2>Groceries Tracker</h2><p>Plan the week, build the list, save recipes.</p></div>
+    </a>
+    <a class="menu-card" href="butler">
+        <span class="menu-icon green">🦇</span>
+        <div><h2>Home Butler</h2><p>Ask for help finding deals, products, or info.</p></div>
+    </a>
 </section>
-
-@if (!string.IsNullOrWhiteSpace(StatusMessage))
-{
-    <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLast">Undo</button> }</div>
-}
-
-@if (ShowPaycheckForm)
-{
-    <section class="panel form-panel paycheck-panel">
-        <div class="panel-head"><h2>Log a paycheck</h2><button class="icon-button" @onclick="() => ShowPaycheckForm = false">×</button></div>
-        <div class="form-grid">
-            <label>Whose paycheck?<select @bind="PaycheckOwner"><option>Me</option><option>Jess</option></select></label>
-            <label>Amount<input type="number" step=".01" @bind="PaycheckAmount" /></label>
-            <label>Date<input type="date" @bind="PaycheckDate" /></label>
-        </div>
-        <div class="form-actions">
-            <button class="button primary" disabled="@(PaycheckAmount <= 0)" @onclick="LogPaycheck">Log it — updates income right away</button>
-            <button class="text-button" @onclick="ClearPaycheckForm">Clear</button>
-        </div>
-    </section>
-}
 
 <details class="jess-surprise">
     <summary><span class="love-heart">♥</span><div><small>HEY JESS…</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
     <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
 </details>
 
-<section class="panel">
-    <div class="panel-head"><div><span class="kicker">JESS'S FAVE SHOPPING</span><h2>Quick shopping tabs</h2><p class="muted">One click to her go-to stores — opens in a new tab.</p></div><button class="icon-button" title="Add a site" @onclick="() => ShowSiteForm = !ShowSiteForm">＋</button></div>
-    <div class="site-tabs">
-        @foreach (var site in Store.Data.ShoppingSites)
-        {
-            <a class="site-tab" target="_blank" href="@site.Url">@site.Name<button class="delete-button" title="Remove" @onclick:preventDefault @onclick:stopPropagation @onclick="() => DeleteSite(site.Id)">×</button></a>
-        }
-    </div>
-    @if (ShowSiteForm)
-    {
-        <div class="form-grid">
-            <label>Site name<input @bind="NewSiteName" placeholder="e.g. Nordstrom" /></label>
-            <label class="wide">Link<input @bind="NewSiteUrl" placeholder="https://…" /></label>
-            <label>For whom?<select @bind="NewSiteOwner"><option>Jess</option><option>Me</option><option>Shared</option></select></label>
-        </div>
-        <div class="form-actions">
-            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(NewSiteName) || !IsWebUrl(NewSiteUrl))" @onclick="AddSite">Add tab</button>
-            <button class="text-button" @onclick="() => ShowSiteForm = false">Cancel</button>
-        </div>
-    }
-    <div class="search-window">
-        <span class="search-icon">⌕</span><input @bind="ShopSearch" @bind:event="oninput" placeholder="Search for something to buy…" />
-        <a class="button magic" target="_blank" href="@ShopSearchUrl">Search the web ↗</a>
-    </div>
-</section>
-
-<section class="cat-corner">
-    <span class="cat-face">@CatFace</span>
-    <div><span class="kicker">THE GOTHAM LOUNGE</span><blockquote>“@Quote”</blockquote><cite>— low-key Larry June energy, Gotham edition</cite></div>
-    <button class="button primary" @onclick="ShuffleVibes">🦇 New vibe</button>
-</section>
-
-<section class="stat-grid">
-    <div class="stat-card sage"><span>Left this month</span><strong>@Remaining.ToString("C0")</strong><small>@Income.ToString("C0") income · @Spending.ToString("C0") spent</small></div>
-    <div class="stat-card peach"><span>Next bill due</span><strong>@NextDue</strong><small>@(NextDueBill is null ? "Add a bill" : $"{NextDueBill.Name} · {NextDueBill.Amount:C0}")</small></div>
-    <div class="stat-card butter"><span>Groceries left</span><strong>@Store.Data.Groceries.Count(x => !x.IsChecked) items</strong><small><a href="food">Open the shopping list →</a></small></div>
-    <div class="stat-card lilac"><span>Dinner tonight</span><strong class="meal-name">@TonightMeal</strong><small><a href="food">See the week →</a></small></div>
-</section>
-
-<section class="two-column">
-    <div class="panel">
-        <div class="panel-head"><div><span class="kicker">MONEY FLOW</span><h2>Recent activity</h2></div><a href="finances">View all</a></div>
-        @if (!Store.Data.Transactions.Any())
-        {
-            <p class="muted">Nothing logged yet — add a transaction or log a paycheck above.</p>
-        }
-        @foreach (var item in Store.Data.Transactions.OrderByDescending(x => x.Date).Take(4))
-        {
-            <div class="activity-row"><span class="category-icon">@Icon(item.Category)</span><div><strong>@item.Description</strong><small>@item.Category · @item.Owner · @item.Date.ToString("MMM d")</small></div><b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b><button title="Remove" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></div>
-        }
-    </div>
-    <div class="panel goal-panel">
-        @if (Goal is null || EditingGoal)
-        {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
-            <div class="form-grid">
-                <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
-                <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
-                <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
-            </div>
-            <div class="form-actions">
-                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
-                @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
-            </div>
-        }
-        else
-        {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
-            <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
-            <div class="progress"><i style="width:@GoalPercent%"></i></div>
-            <p>@GoalPercent% there. Every bit counts.</p>
-            <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
-        }
-    </div>
-</section>
-
 @code {
-    static readonly string[] CatFaces = ["🐱", "🐈‍⬛", "🦇", "🐾", "💎"];
-    static readonly string[] Vibes =
-    [
-        "Sip the orange juice, water the plants, patrol the block. That's the whole morning.",
-        "Organic everything, even the vibes. Stay rooted, stay easy, stay sharp.",
-        "Real estate in your mind too — keep that space clean and paid off.",
-        "Slow cook the rice, slow cook the plan. Good things don't rush, not even at night.",
-        "Fresh air, fresh produce, fresh start. The cape's optional, the calm isn't.",
-        "Stack the small wins like groceries — one bag at a time, no rush.",
-        "Even the night watch naps in the sun when it can. Take the nap.",
-        "Keep the budget warm and the kitchen warmer.",
-        "Every safehouse started with someone choosing calm over chaos.",
-        "Drink water, check the savings goal, keep the claws sheathed for family."
-    ];
-    string CatFace = CatFaces[0];
-    string Quote = Vibes[0];
-    void ShuffleVibes() { CatFace = CatFaces[Random.Shared.Next(CatFaces.Length)]; Quote = Vibes[Random.Shared.Next(Vibes.Length)]; }
-    protected override void OnInitialized() => ShuffleVibes();
-    decimal Income => Store.Data.Transactions.Where(x => x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
-    decimal Spending => Store.Data.Transactions.Where(x => !x.IsIncome && x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year).Sum(x => x.Amount);
-    decimal Remaining => Income - Spending;
-    SavingsGoal? Goal => Store.Data.SavingsGoals.FirstOrDefault();
-    SavingsGoal GoalDraft = new();
-    bool EditingGoal;
-    int GoalPercent => Goal is null || Goal.Target == 0 ? 0 : (int)Math.Min(100, Goal.Current / Goal.Target * 100);
-    void StartEditGoal() { if (Goal is not null) { GoalDraft = new() { Id = Goal.Id, Name = Goal.Name, Current = Goal.Current, Target = Goal.Target }; EditingGoal = true; } }
-    async Task SaveGoal()
-    {
-        if (Goal is { } existing) { existing.Name = GoalDraft.Name; existing.Current = GoalDraft.Current; existing.Target = GoalDraft.Target; }
-        else { Store.Data.SavingsGoals.Add(GoalDraft); }
-        await Store.SaveAsync();
-        GoalDraft = new();
-        EditingGoal = false;
-    }
-    string TonightMeal => Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == DateTime.Today)?.Meal ?? "Pick something cozy";
-
-    bool ShowSiteForm;
-    string NewSiteName = "", NewSiteUrl = "", NewSiteOwner = "Jess";
-    string ShopSearch = "";
-    string ShopSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(ShopSearch) ? "shopping" : ShopSearch)}";
-    static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-    async Task AddSite()
-    {
-        await Store.AddShoppingSiteAsync(NewSiteName, NewSiteUrl, NewSiteOwner);
-        NewSiteName = ""; NewSiteUrl = ""; NewSiteOwner = "Jess";
-        ShowSiteForm = false;
-    }
-    async Task DeleteSite(Guid id) => await Store.DeleteShoppingSiteAsync(id);
-    Bill? NextDueBill
+    static string TimeOfDay
     {
         get
         {
-            var today = DateTime.Today;
-            bool PaidThisCycle(Bill b) => b.LastPaidDate is { } d && d.Year == today.Year && d.Month == today.Month;
-            return Store.Data.Bills.Where(x => x.IsActive && !PaidThisCycle(x))
-                .OrderBy(x => x.DueDay >= today.Day ? x.DueDay - today.Day : x.DueDay - today.Day + DateTime.DaysInMonth(today.Year, today.Month))
-                .FirstOrDefault();
+            var hour = DateTime.Now.Hour;
+            if (hour < 12) return "morning";
+            if (hour < 17) return "afternoon";
+            return "evening";
         }
-    }
-    string NextDue => NextDueBill is null ? "Nothing yet" : $"Day {NextDueBill.DueDay}";
-    static string Icon(string category) => category switch { "Groceries" => "🛒", "Bills" => "⌁", "Income" => "↗", _ => "•" };
-
-    string UploadNote = "";
-    bool IsUploading;
-    async Task UploadFile(InputFileChangeEventArgs args)
-    {
-        IsUploading = true;
-        try
-        {
-            await using var stream = args.File.OpenReadStream(50 * 1024 * 1024);
-            await Store.SaveUploadAsync(stream, args.File.Name, args.File.ContentType, UploadNote);
-            UploadNote = "";
-        }
-        finally { IsUploading = false; }
-    }
-    async Task DeleteUpload(Guid id) => await Store.DeleteUploadAsync(id);
-
-    bool ShowPaycheckForm;
-    string PaycheckOwner = "Me";
-    decimal PaycheckAmount;
-    DateTime PaycheckDate = DateTime.Today;
-    string StatusMessage = "";
-    Transaction? LastRemoved;
-    int LastRemovedIndex = -1;
-    void ClearPaycheckForm() { PaycheckAmount = 0; PaycheckDate = DateTime.Today; }
-    async Task LogPaycheck()
-    {
-        LastRemoved = null;
-        var amount = PaycheckAmount;
-        var owner = PaycheckOwner;
-        Store.Data.Transactions.Add(new()
-        {
-            Description = $"{owner} paycheck",
-            Category = "Income",
-            Owner = owner,
-            Amount = amount,
-            IsIncome = true,
-            Date = PaycheckDate
-        });
-        await Store.SaveAsync();
-        StatusMessage = $"Logged {owner}'s paycheck — +{amount:C}. It's already counted in this month's income below.";
-        PaycheckAmount = 0;
-        PaycheckDate = DateTime.Today;
-        ShowPaycheckForm = false;
-    }
-    async Task DeleteTransaction(Transaction item)
-    {
-        LastRemovedIndex = Store.Data.Transactions.IndexOf(item);
-        LastRemoved = item;
-        Store.Data.Transactions.Remove(item);
-        await Store.SaveAsync();
-        StatusMessage = $"Removed \"{item.Description}\".";
-    }
-    async Task UndoLast()
-    {
-        if (LastRemoved is not null)
-        {
-            Store.Data.Transactions.Insert(Math.Min(LastRemovedIndex, Store.Data.Transactions.Count), LastRemoved);
-            LastRemoved = null;
-            await Store.SaveAsync();
-        }
-        StatusMessage = "";
     }
 }
