@@ -1,39 +1,31 @@
 @page "/"
 @inject ActivePersonService ActivePerson
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 <PageTitle>Manor Household Hub</PageTitle>
 
-<section class="page-heading">
-    <div><span class="kicker">@DateTime.Now.ToString("dddd, MMMM d")</span><h1>Good @(TimeOfDay), <em>@(ActivePerson.Current)</em>.</h1><p>Pick a spot to land — everything's one tap away.</p></div>
-</section>
+<div id="vanta-stage" class="vanta-stage"></div>
 
-<section class="menu-grid">
-    <a class="menu-card" href="bills">
-        <span class="menu-icon sage">💵</span>
-        <div><h2>Bills &amp; Money</h2><p>Track spending, log income, manage bills, import from Rocket Money.</p></div>
-    </a>
-    <a class="menu-card" href="calendar">
-        <span class="menu-icon peach">📅</span>
-        <div><h2>Calendar</h2><p>See what's due and when across the month.</p></div>
-    </a>
-    <a class="menu-card" href="shopping-tracker">
-        <span class="menu-icon butter">🛍️</span>
-        <div><h2>Shopping Tracker</h2><p>Wishlist items, fave stores, and quick product search.</p></div>
-    </a>
-    <a class="menu-card" href="groceries-tracker">
-        <span class="menu-icon lilac">🥬</span>
-        <div><h2>Groceries Tracker</h2><p>Plan the week, build the list, save recipes.</p></div>
-    </a>
-    <a class="menu-card" href="butler">
-        <span class="menu-icon green">🦇</span>
-        <div><h2>Home Butler</h2><p>Ask for help finding deals, products, or info.</p></div>
-    </a>
-</section>
+<section class="cloud-landing">
+    <div class="cloud-greeting">
+        <span class="kicker">@DateTime.Now.ToString("dddd, MMMM d")</span>
+        <h1>Good @(TimeOfDay), <em>@(ActivePerson.Current)</em>.</h1>
+    </div>
 
-<details class="jess-surprise">
-    <summary><span class="love-heart">♥</span><div><small>HEY JESS…</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
-    <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
-</details>
+    <nav class="cloud-menu">
+        <a class="cloud-link" href="bills"><span>💵</span>Bills &amp; Money</a>
+        <a class="cloud-link" href="calendar"><span>📅</span>Calendar</a>
+        <a class="cloud-link" href="shopping-tracker"><span>🛍️</span>Shopping Tracker</a>
+        <a class="cloud-link" href="groceries-tracker"><span>🥬</span>Groceries Tracker</a>
+        <a class="cloud-link" href="butler"><span>🦇</span>Home Butler</a>
+    </nav>
+
+    <details class="jess-surprise">
+        <summary><span class="love-heart">♥</span><span class="open-hint">a tiny surprise ✦</span></summary>
+        <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
+    </details>
+</section>
 
 @code {
     static string TimeOfDay
@@ -45,5 +37,19 @@
             if (hour < 17) return "afternoon";
             return "evening";
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("vantaClouds.init", "vanta-stage");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("vantaClouds.dispose"); }
+        catch (JSDisconnectedException) { }
     }
 }
