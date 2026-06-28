@@ -1,8 +1,10 @@
 @page "/bills"
+@implements IDisposable
 @inject HouseholdStore Store
 @inject CashflowService Cashflow
 @inject BillCalendarService BillCal
 @inject ILoggerFactory LoggerFactory
+@inject ActivePersonService ActivePerson
 
 <PageTitle>Bills & Money — Manor</PageTitle>
 <section class="page-heading">
@@ -535,7 +537,17 @@ else
             Shared = Store.Data.Funds.Shared, Buffer = Store.Data.Funds.Buffer
         };
         CalculateReviewThreshold();
+        OwnerFilter = ActivePerson.Current == "Trey" ? "Me" : "Jess";
+        ActivePerson.Changed += OnActivePersonChanged;
     }
+
+    void OnActivePersonChanged()
+    {
+        OwnerFilter = ActivePerson.Current == "Trey" ? "Me" : "Jess";
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => ActivePerson.Changed -= OnActivePersonChanged;
 
     CashflowSummary Summary => Cashflow.BuildSummary(SelectedWindow, CustomDate);
 

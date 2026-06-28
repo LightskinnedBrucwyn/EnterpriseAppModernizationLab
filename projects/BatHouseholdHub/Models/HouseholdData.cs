@@ -19,7 +19,7 @@ public class HouseholdData
 }
 
 /// <summary>Connection settings for the local LLM ("Home Butler") used as a free,
-/// no-token fallback for tasks like wishboard product lookup once Open Graph scraping
+/// no-token fallback for tasks like shopping tracker product lookup once Open Graph scraping
 /// comes up empty. Points at an Ollama-compatible server on the household's own network.</summary>
 public class HomeButlerSettings
 {

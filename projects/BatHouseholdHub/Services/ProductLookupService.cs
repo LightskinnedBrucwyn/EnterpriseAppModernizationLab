@@ -15,7 +15,7 @@ public class ProductLookupResult
 
 /// <summary>Best-effort product info lookup via the Claude API's web search tool.
 /// Returns Success=false (never throws) if the API key is missing or the call fails,
-/// so the wishboard always falls back gracefully to manual entry.</summary>
+/// so the shopping tracker always falls back gracefully to manual entry.</summary>
 public class ProductLookupService(HttpClient http, IConfiguration config, ILogger<ProductLookupService> logger)
 {
     public bool IsConfigured => !string.IsNullOrWhiteSpace(config["ANTHROPIC_API_KEY"]);
