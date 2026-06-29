@@ -35,9 +35,9 @@
 </section>
 
 <section class="capture-bar">
-    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Paste a link — we'll try to pull the name, price, and photo straight from the page automatically.</small></div>
-    <input @bind="QuickUrl" @bind:event="oninput" placeholder="Paste product link here…" disabled="@IsLookingUp" />
-    <button class="button primary" disabled="@(!IsWebUrl(QuickUrl) || IsLookingUp)" @onclick="CaptureLink">@(IsLookingUp ? "Looking it up…" : "Make card →")</button>
+    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Paste a link, or paste a whole cart — one link per line — and we'll try to pull the name, price, and photo for each automatically.</small></div>
+    <textarea @bind="QuickUrl" @bind:event="oninput" rows="2" placeholder="Paste product link(s) here, one per line…" disabled="@IsLookingUp"></textarea>
+    <button class="button primary" disabled="@(ValidLinkCount == 0 || IsLookingUp)" @onclick="CaptureLink">@(IsLookingUp ? "Looking it up…" : ValidLinkCount > 1 ? $"Make {ValidLinkCount} cards →" : "Make card →")</button>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -128,6 +128,8 @@ else
         public decimal this[Guid id] { get => map.TryGetValue(id, out var v) ? v : 0; set => map[id] = value; }
     }
     IEnumerable<PurchaseIdea> Filtered => string.IsNullOrWhiteSpace(Search) ? Store.Data.PurchaseIdeas : Store.Data.PurchaseIdeas.Where(x => $"{x.Name} {x.Category} {x.Owner} {x.Notes}".Contains(Search, StringComparison.OrdinalIgnoreCase));
+    IEnumerable<string> QuickLinks => QuickUrl.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(IsWebUrl).Distinct();
+    int ValidLinkCount => QuickLinks.Count();
     string ShoppingSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(Search) ? "shopping ideas" : Search)}";
     void OpenAddForm() { Draft = new(); EditingId = null; ShowForm = true; }
     void ClearForm() { var keepEditing = EditingId; var id = Draft.Id; Draft = new() { Id = id }; EditingId = keepEditing; }
@@ -192,50 +194,71 @@ else
     }
     async Task CaptureLink()
     {
-        if (!IsWebUrl(QuickUrl)) return;
+        var links = QuickLinks.ToList();
+        if (links.Count == 0) return;
         LastRemoved = null;
         LookupNote = "";
         StatusMessage = "";
-        var url = QuickUrl.Trim();
-        var uri = new Uri(url);
-        Draft = new PurchaseIdea { ProductUrl = url, Name = PrettyStoreName(uri.Host) };
         QuickUrl = "";
 
         IsLookingUp = true;
         try
         {
-            // Free first: most storefronts embed Open Graph / JSON-LD product data directly in the page.
-            var result = await Scraper.ScrapeAsync(url);
-            var source = "the page itself";
-
-            // Local LLM next (no token cost) -- only useful once Ollama/Qwen is reachable and wired up.
-            if (!result.Success && Butler.IsConfigured)
+            if (links.Count == 1)
             {
-                result = await Butler.LookupAsync(url, pageExcerpt: url);
-                source = "Home Butler";
-            }
-
-            // Paid API as a last resort, only if explicitly configured.
-            if (!result.Success && Lookup.IsConfigured)
-            {
-                result = await Lookup.LookupAsync(url);
-                source = "Claude";
-            }
-
-            if (result.Success)
-            {
-                if (!string.IsNullOrWhiteSpace(result.Name)) Draft.Name = result.Name;
-                if (result.Price > 0) Draft.Price = result.Price;
-                if (!string.IsNullOrWhiteSpace(result.ImageUrl)) Draft.ImageUrl = result.ImageUrl;
-                StatusMessage = $"Pulled product details from {source}.";
+                var url = links[0];
+                var uri = new Uri(url);
+                Draft = new PurchaseIdea { ProductUrl = url, Name = PrettyStoreName(uri.Host) };
+                var (success, source, error) = await LookupOneAsync(url, Draft);
+                if (success) StatusMessage = $"Pulled product details from {source}.";
+                else LookupNote = $"Couldn't auto-fill details ({error}) — fill them in below.";
+                ShowForm = true;
             }
             else
             {
-                LookupNote = $"Couldn't auto-fill details ({result.Error}) — fill them in below.";
+                var filled = 0;
+                foreach (var url in links)
+                {
+                    var uri = new Uri(url);
+                    var idea = new PurchaseIdea { ProductUrl = url, Name = PrettyStoreName(uri.Host) };
+                    var (success, _, _) = await LookupOneAsync(url, idea);
+                    if (success) filled++;
+                    Store.Data.PurchaseIdeas.Add(idea);
+                }
+                await Store.SaveAsync();
+                StatusMessage = $"Added {links.Count} items from your cart ({filled} auto-filled — check the rest below).";
             }
         }
         finally { IsLookingUp = false; }
-        ShowForm = true;
+    }
+
+    async Task<(bool Success, string Source, string Error)> LookupOneAsync(string url, PurchaseIdea target)
+    {
+        // Free first: most storefronts embed Open Graph / JSON-LD product data directly in the page.
+        var result = await Scraper.ScrapeAsync(url);
+        var source = "the page itself";
+
+        // Local LLM next (no token cost) -- only useful once Ollama/Qwen is reachable and wired up.
+        if (!result.Success && Butler.IsConfigured)
+        {
+            result = await Butler.LookupAsync(url, pageExcerpt: url);
+            source = "Home Butler";
+        }
+
+        // Paid API as a last resort, only if explicitly configured.
+        if (!result.Success && Lookup.IsConfigured)
+        {
+            result = await Lookup.LookupAsync(url);
+            source = "Claude";
+        }
+
+        if (result.Success)
+        {
+            if (!string.IsNullOrWhiteSpace(result.Name)) target.Name = result.Name;
+            if (result.Price > 0) target.Price = result.Price;
+            if (!string.IsNullOrWhiteSpace(result.ImageUrl)) target.ImageUrl = result.ImageUrl;
+        }
+        return (result.Success, source, result.Error ?? "");
     }
     static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     static string CleanUrl(string value) => IsWebUrl(value) ? value.Trim() : "";
