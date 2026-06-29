@@ -31,11 +31,16 @@
         {
             var day = cell.Day.Value;
             var isToday = day == DateTime.Today;
+            var dayBills = BillCal.BillsOnDay(CurrentMonth.Year, CurrentMonth.Month, day.Day).ToList();
             <div class="cal-day @(isToday ? "today" : "")">
                 <span class="cal-day-num">@day.Day</span>
-                @foreach (var item in BillCal.BillsOnDay(CurrentMonth.Year, CurrentMonth.Month, day.Day))
+                @foreach (var item in dayBills.Take(3))
                 {
                     <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
+                }
+                @if (dayBills.Count > 3)
+                {
+                    <span class="cal-pill-more" title="@string.Join(", ", dayBills.Skip(3).Select(x => x.Bill.Name))">+@(dayBills.Count - 3) more</span>
                 }
             </div>
         }
