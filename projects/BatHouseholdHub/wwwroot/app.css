@@ -248,3 +248,23 @@ h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
     .bill-row .row-actions{grid-column:1/-1;flex-wrap:wrap}
     .row-actions{flex-wrap:wrap}
 }
+
+/* Money pulse banner (Bills page) — affordability at a glance, color-coded by how tight things are */
+.money-pulse{margin-bottom:24px;border-left:5px solid var(--organic)}
+.money-pulse .panel-head{margin-bottom:0}
+.money-pulse h2{font-size:21px}
+.money-pulse b{font:700 26px 'Fraunces',serif;white-space:nowrap}
+.money-pulse.pulse-healthy{background:var(--sage);border-left-color:var(--organic)}
+.money-pulse.pulse-tight{background:var(--butter);border-left-color:#caa12a}
+.money-pulse.pulse-tight b{color:#7a5b09}
+.money-pulse.pulse-over{background:#fde4e4;border-left-color:#b3261e}
+.money-pulse.pulse-over b{color:#b3261e}
+
+/* Spending pulse panel (Transactions tab) — month-over-month trend + category breakdown */
+.spending-pulse b.trend-up{color:#b3261e;font-size:14px;white-space:nowrap}
+.spending-pulse b.trend-down{color:var(--organic);font-size:14px;white-space:nowrap}
+.category-pulse-row{display:grid;grid-template-columns:120px 1fr 70px;align-items:center;gap:12px;margin-bottom:10px}
+.category-pulse-row span{font-size:13px;font-weight:600;color:var(--muted)}
+.category-pulse-row .progress{margin:0}
+.category-pulse-row b{font-size:13px;text-align:right}
+@media(max-width:720px){.category-pulse-row{grid-template-columns:90px 1fr 60px}}

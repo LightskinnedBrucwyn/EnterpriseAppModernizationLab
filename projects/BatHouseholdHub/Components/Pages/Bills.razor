@@ -27,6 +27,13 @@
     <div class="success-toast">✓ @StatusMessage @if (LastRemoved is not null) { <button class="undo-button" @onclick="UndoLastTx">Undo</button> }</div>
 }
 
+<section class="panel money-pulse @PulseClass">
+    <div class="panel-head">
+        <div><span class="kicker">CAN WE AFFORD IT?</span><h2>@PulseHeadline</h2><p class="muted">@PulseDetail</p></div>
+        <b>@Summary.AmountLeftAfterBuffer.ToString("C")</b>
+    </div>
+</section>
+
 @if (Tab == "Overview")
 {
     <section class="panel funds-panel">
@@ -338,6 +345,27 @@ else
         <div class="stat-card lilac"><span>Shared spending</span><strong>@TxShared.ToString("C")</strong></div>
     </section>
 
+    <section class="panel spending-pulse">
+        <div class="panel-head"><div><span class="kicker">SPENDING PULSE</span><h2>How this month compares</h2></div>
+            <b class="@(SpendDelta > 0 ? "trend-up" : "trend-down")">@(SpendDelta > 0 ? "▲" : "▼") @Math.Abs(SpendDelta).ToString("C") vs last month</b>
+        </div>
+        @if (!TopCategoriesThisMonth.Any())
+        {
+            <p class="muted">No spending logged yet this month.</p>
+        }
+        else
+        {
+            @foreach (var (category, amount) in TopCategoriesThisMonth)
+            {
+                <div class="category-pulse-row">
+                    <span>@category</span>
+                    <div class="progress"><i style="width:@(TxSpending <= 0 ? 0 : amount / TxSpending * 100)%"></i></div>
+                    <b>@amount.ToString("C0")</b>
+                </div>
+            }
+        }
+    </section>
+
     <section class="transaction-browser">
         <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction gallery</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div><div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div></div>
 
@@ -462,6 +490,14 @@ else
     public void Dispose() => ActivePerson.Changed -= OnActivePersonChanged;
 
     CashflowSummary Summary => Cashflow.BuildSummary(SelectedWindow, CustomDate);
+    string PulseClass => Summary.AmountLeftAfterBuffer < 0 ? "pulse-over" : Summary.AmountLeftAfterBuffer < 150 ? "pulse-tight" : "pulse-healthy";
+    string PulseHeadline => Summary.AmountLeftAfterBuffer < 0
+        ? $"Short by {Math.Abs(Summary.AmountLeftAfterBuffer):C} before {Summary.SelectedDate:MMM d}"
+        : Summary.AmountLeftAfterBuffer < 150
+            ? $"Tight — {Summary.AmountLeftAfterBuffer:C} left before {Summary.SelectedDate:MMM d}"
+            : $"Safe to spend {Summary.AmountLeftAfterBuffer:C} before {Summary.SelectedDate:MMM d}";
+    string PulseDetail => $"After {(Summary.UpcomingBillsBeforeSelectedDate + Summary.RequiredDebtPaymentsBeforeSelectedDate + Summary.PendingPayments + Summary.ReservedMoney):C} in bills and holds, plus a {Summary.BufferAmount:C} buffer kept aside" +
+        (Summary.NextPaycheck is { } np ? $" — next paycheck {np.NetAmount:C} expected {np.ExpectedDate:MMM d}." : ".");
 
     record BillGroup(BillCategory Category, List<Bill> Bills, decimal Total);
     IEnumerable<BillGroup> Groups => Enum.GetValues<BillCategory>()
@@ -644,6 +680,11 @@ else
     decimal TxIncome => Month.Where(x => x.IsIncome).Sum(x => x.Amount);
     decimal TxSpending => Month.Where(x => !x.IsIncome).Sum(x => x.Amount);
     decimal TxShared => Month.Where(x => !x.IsIncome && x.Owner == "Shared").Sum(x => x.Amount);
+    IEnumerable<Transaction> LastMonth => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.AddMonths(-1).Month && x.Date.Year == DateTime.Today.AddMonths(-1).Year);
+    decimal LastMonthSpending => LastMonth.Where(x => !x.IsIncome).Sum(x => x.Amount);
+    decimal SpendDelta => TxSpending - LastMonthSpending;
+    IEnumerable<(string Category, decimal Amount)> TopCategoriesThisMonth => Month.Where(x => !x.IsIncome)
+        .GroupBy(x => x.Category).Select(g => (g.Key, g.Sum(x => x.Amount))).OrderByDescending(x => x.Item2).Take(4);
     Guid? EditingTxId;
     Transaction? LastRemoved;
     int LastRemovedIndex = -1;
