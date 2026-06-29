@@ -32,6 +32,10 @@
         <div><span class="kicker">CAN WE AFFORD IT?</span><h2>@PulseHeadline</h2><p class="muted">@PulseDetail</p></div>
         <b>@Summary.AmountLeftAfterBuffer.ToString("C")</b>
     </div>
+    @if (Summary.BillsDueThisWeek > 0)
+    {
+        <p class="due-soon">⏰ @Summary.BillsDueThisWeek.ToString("C") in bills due this week@(Summary.BillsDueThisMonth > Summary.BillsDueThisWeek ? $" · {Summary.BillsDueThisMonth:C} by month's end" : "")</p>
+    }
 </section>
 
 @if (Tab == "Overview")

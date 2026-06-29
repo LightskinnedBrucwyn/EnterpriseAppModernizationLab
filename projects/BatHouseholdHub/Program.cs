@@ -29,6 +29,7 @@ builder.Services.AddScoped<CashflowService>();
 builder.Services.AddScoped<BillCalendarService>();
 builder.Services.AddScoped<ActivePersonService>();
 builder.Services.AddHostedService<RecurringTransactionService>();
+builder.Services.AddHostedService<HouseholdBackupService>();
 builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddHttpClient<OpenGraphScraperService>();
 builder.Services.AddHttpClient<HomeButlerService>();

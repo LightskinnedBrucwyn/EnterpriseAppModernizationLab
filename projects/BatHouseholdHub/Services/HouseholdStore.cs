@@ -11,6 +11,7 @@ public class HouseholdStore
 {
     private readonly string _path;
     private readonly string _uploadsFolder;
+    private readonly string _backupsFolder;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<HouseholdStore> _logger;
     public HouseholdData Data { get; private set; }
@@ -22,6 +23,8 @@ public class HouseholdStore
         Directory.CreateDirectory(folder);
         _uploadsFolder = Path.Combine(folder, "uploads");
         Directory.CreateDirectory(_uploadsFolder);
+        _backupsFolder = Path.Combine(folder, "backups");
+        Directory.CreateDirectory(_backupsFolder);
         _path = Path.Combine(folder, "household.json");
         Data = Load();
         var changed = EnsureStarterRecipes();
@@ -82,6 +85,29 @@ public class HouseholdStore
     }
 
     public string UploadPath(Guid id) => Path.Combine(_uploadsFolder, id.ToString("N"));
+
+    /// <summary>Snapshots household.json into App_Data/backups once per calendar day and prunes
+    /// anything older than 30 days. household.json is the household's only copy of its data, so
+    /// this is cheap insurance against a bad edit, a corrupt write, or disk trouble.</summary>
+    public Task BackupIfNeededAsync()
+    {
+        try
+        {
+            var backupPath = Path.Combine(_backupsFolder, $"household-{DateTime.Today:yyyyMMdd}.json");
+            if (!File.Exists(backupPath) && File.Exists(_path))
+                File.Copy(_path, backupPath);
+
+            var cutoff = DateTime.Today.AddDays(-30);
+            foreach (var file in Directory.GetFiles(_backupsFolder, "household-*.json"))
+            {
+                var stamp = Path.GetFileNameWithoutExtension(file)["household-".Length..];
+                if (DateTime.TryParseExact(stamp, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) && date < cutoff)
+                    File.Delete(file);
+            }
+        }
+        catch (Exception ex) { _logger.LogError(ex, "Failed to back up household.json"); }
+        return Task.CompletedTask;
+    }
 
     public async Task AddQuickLogAsync(string text, string owner)
     {
