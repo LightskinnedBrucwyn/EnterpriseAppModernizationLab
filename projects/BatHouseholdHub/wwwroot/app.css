@@ -200,3 +200,42 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .panel-head h2,.browser-heading h2,.rocket-copy h2,.recipe-card h2,.wish-body h2,.wish-preview h2,.menu-card h2{font:600 20px/1.25 'Fraunces',serif}
 h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
 @media(max-width:720px){.food-tabs button{padding:11px 13px;font-size:13px}.cal-nav{gap:10px}}
+
+/* Calendar/panel-head wrapping fix: let the totals row break onto its own line instead of squeezing */
+.panel-head{flex-wrap:wrap;row-gap:8px}
+.panel-head b{overflow-wrap:break-word}
+.bill-info strong,.bill-info small{overflow-wrap:break-word}
+
+/* ===== Light boutique theme — every route except Home ===== */
+.app-shell:not(.is-home){
+    --ink:#1c1c1c;--muted:#6f6a63;--cream:#faf7f1;--paper:#ffffff;
+    --sage:#eef2ea;--peach:#fbece1;--butter:#faf1d8;--lilac:#ece9f6;
+    --line:rgba(20,20,20,.14);--shadow:none;
+    --deep:#3d6e82;--organic:#2f6b46;--organic-deep:#1f4d32;--organic-soft:rgba(47,107,70,.08);
+    --signal-glow:rgba(0,0,0,.04);
+    --sidebar-muted:#6f6a63;
+    --gold:#b8902c;--violet:#2b2b2b;--noir:#0a0a0a;
+    --orange:#b5532f;--glass-blur:0px;
+    background:#faf7f1;
+}
+.app-shell:not(.is-home) .topnav{background:rgba(255,255,255,.92);border-bottom:1px solid var(--line);box-shadow:none}
+.app-shell:not(.is-home) .topnav nav a:hover,.app-shell:not(.is-home) .topnav nav a.active{background:rgba(47,107,70,.08)}
+.app-shell:not(.is-home) .nav-search:hover{background:rgba(0,0,0,.06);color:var(--ink)}
+.app-shell:not(.is-home) .brand-mark{color:#fff}
+.app-shell:not(.is-home) .avatar-pair button{color:#fff}
+.app-shell:not(.is-home) .avatar-pair button.active{border-color:var(--ink);box-shadow:0 0 0 3px rgba(0,0,0,.12)}
+.app-shell:not(.is-home) .form-grid input,.app-shell:not(.is-home) .form-grid select,.app-shell:not(.is-home) .form-grid textarea,.app-shell:not(.is-home) .filter,.app-shell:not(.is-home) .quick-add input,.app-shell:not(.is-home) .quick-add select,.app-shell:not(.is-home) .day-card select,.app-shell:not(.is-home) .import-controls select,.app-shell:not(.is-home) .filter-panel select,.app-shell:not(.is-home) .filter-panel input{background:#fdfcfa;border:1px solid var(--line);color:var(--ink)}
+.app-shell:not(.is-home) .capture-bar input{background:#f4f2ee;border:1px solid var(--line)}
+.app-shell:not(.is-home) .priority{box-shadow:0 2px 8px rgba(0,0,0,.15)}
+.app-shell:not(.is-home) .import-message.error{color:#b3261e}
+.app-shell:not(.is-home) .badge.priority-critical{background:#fde4e4;color:#b3261e}
+.app-shell:not(.is-home) .badge.priority-debt{background:#fdebd8;color:#9a4a26}
+.app-shell:not(.is-home) .badge.priority-subscription{background:#e9e7f7;color:#5b4fc4}
+.app-shell:not(.is-home) .badge.priority-optional{background:var(--line);color:var(--muted)}
+.app-shell:not(.is-home) .badge.status-upcoming{background:var(--line);color:var(--muted)}
+.app-shell:not(.is-home) .badge.status-pending{background:#fbf0cf;color:#8a6a0a}
+.app-shell:not(.is-home) .badge.status-paid{background:#e3efe6;color:var(--organic)}
+.app-shell:not(.is-home) .badge.status-review{background:#fde4e4;color:#b3261e}
+.app-shell:not(.is-home) .badge.status-reserved{background:#e9e7f7;color:#5b4fc4}
+.app-shell:not(.is-home) .badge.status-delayed{background:#f3e3fa;color:#8a3fae}
+.app-shell:not(.is-home) .badge.status-skipped{background:var(--line);color:var(--muted)}
