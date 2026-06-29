@@ -214,12 +214,18 @@ else
                 LookupNote = "Couldn't find any items in that text — try pasting product links instead.";
                 return;
             }
+            var added = 0;
             foreach (var (name, price) in parsed)
             {
+                if (Store.Data.PurchaseIdeas.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && x.Price == price)) continue;
                 Store.Data.PurchaseIdeas.Add(new PurchaseIdea { Name = name, Price = price, ProductUrl = sharedLink ?? "" });
+                added++;
             }
             await Store.SaveAsync();
-            StatusMessage = $"Added {parsed.Count} item{(parsed.Count == 1 ? "" : "s")} parsed from your cart text — check prices and links below.";
+            var skipped = parsed.Count - added;
+            StatusMessage = added == 0
+                ? "Looks like all of those are already on your board."
+                : $"Added {added} item{(added == 1 ? "" : "s")} from your cart text{(skipped > 0 ? $" ({skipped} already on the board, skipped)" : "")} — check prices and links below.";
             return;
         }
 

@@ -346,9 +346,11 @@ public class HouseholdStore
         var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
         if (bill is null) return;
         var today = DateTime.Today;
+        var alreadyPosted = Data.Transactions.Any(x => x.Source == "Bill payment" && x.Description == bill.Name
+            && x.Date.Year == today.Year && x.Date.Month == today.Month);
         bill.LastPaidDate = today;
         bill.ManualStatus = BillStatus.Upcoming;
-        if (bill.Amount > 0)
+        if (bill.Amount > 0 && !alreadyPosted)
         {
             Data.Transactions.Add(new Transaction
             {
