@@ -2,6 +2,7 @@ using System.Globalization;
 using BatHouseholdHub.Components;
 using BatHouseholdHub.Services;
 using Microsoft.AspNetCore.DataProtection;
+using Going.Plaid;
 
 var usCulture = new CultureInfo("en-US");
 CultureInfo.DefaultThreadCurrentCulture = usCulture;
@@ -34,6 +35,18 @@ builder.Services.AddHostedService<PushNotificationService>();
 builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddHttpClient<OpenGraphScraperService>();
 builder.Services.AddHttpClient<HomeButlerService>();
+
+var plaidEnv = builder.Configuration["PLAID_ENV"] switch
+{
+    "production" => Going.Plaid.Environment.Production,
+    "development" => Going.Plaid.Environment.Development,
+    _ => Going.Plaid.Environment.Sandbox
+};
+builder.Services.AddSingleton(new PlaidClient(plaidEnv,
+    secret: builder.Configuration["PLAID_SECRET"] ?? "",
+    clientId: builder.Configuration["PLAID_CLIENT_ID"] ?? ""));
+builder.Services.AddScoped<PlaidService>();
+builder.Services.AddHostedService<PlaidSyncService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataFolder, "keys")))
     .SetApplicationName("BatHouseholdHub");
@@ -78,7 +91,31 @@ app.MapPost("/api/push/unsubscribe", async (PushUnsubscribeRequest req, Househol
     return Results.Ok();
 });
 
+app.MapGet("/api/plaid/configured", (PlaidService plaid) => Results.Ok(new { configured = plaid.IsConfigured }));
+
+app.MapPost("/api/plaid/link-token", async (PlaidLinkTokenRequest req, PlaidService plaid) =>
+{
+    if (!plaid.IsConfigured) return Results.BadRequest("Plaid is not configured on the server.");
+    try { return Results.Ok(new { linkToken = await plaid.CreateLinkTokenAsync(req.Owner) }); }
+    catch (Exception ex) { return Results.BadRequest(ex.Message); }
+});
+
+app.MapPost("/api/plaid/exchange", async (PlaidExchangeRequest req, PlaidService plaid) =>
+{
+    try { var item = await plaid.ExchangePublicTokenAsync(req.PublicToken, req.InstitutionName, req.Owner); return Results.Ok(new { id = item.Id }); }
+    catch (Exception ex) { return Results.BadRequest(ex.Message); }
+});
+
+app.MapPost("/api/plaid/disconnect", async (PlaidDisconnectRequest req, HouseholdStore store) =>
+{
+    await store.RemovePlaidItemAsync(req.Id);
+    return Results.Ok();
+});
+
 app.Run();
 
 record PushSubscribeRequest(string Endpoint, string P256dh, string Auth, string? Owner);
 record PushUnsubscribeRequest(string Endpoint);
+record PlaidLinkTokenRequest(string Owner);
+record PlaidExchangeRequest(string PublicToken, string InstitutionName, string Owner);
+record PlaidDisconnectRequest(Guid Id);

@@ -17,8 +17,25 @@ public class HouseholdData
     public List<QuickLogEntry> QuickLogs { get; set; } = [];
     public List<PushSubscriptionRecord> PushSubscriptions { get; set; } = [];
     public List<string> NotifiedBillKeys { get; set; } = [];
+    public List<PlaidItem> PlaidItems { get; set; } = [];
     public HouseholdFunds Funds { get; set; } = new();
     public HomeButlerSettings HomeButler { get; set; } = new();
+}
+
+/// <summary>A linked bank connection via Plaid — one per institution a household member
+/// connects through Link. The access token is the long-lived credential Plaid issues for
+/// pulling that institution's transactions; it lives only in household.json on the home
+/// server, never in git.</summary>
+public class PlaidItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string ItemId { get; set; } = "";
+    public string AccessToken { get; set; } = "";
+    public string InstitutionName { get; set; } = "";
+    public string Owner { get; set; } = "Shared";
+    public string? SyncCursor { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
+    public DateTime? LastSyncedAt { get; set; }
 }
 
 /// <summary>A browser's Web Push subscription (endpoint + encryption keys), captured once

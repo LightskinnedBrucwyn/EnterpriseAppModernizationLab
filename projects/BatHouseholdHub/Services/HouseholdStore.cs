@@ -145,6 +145,47 @@ public class HouseholdStore
         await SaveAsync();
     }
 
+    public async Task<PlaidItem> AddPlaidItemAsync(string itemId, string accessToken, string institutionName, string owner)
+    {
+        var item = new PlaidItem { ItemId = itemId, AccessToken = accessToken, InstitutionName = institutionName, Owner = owner };
+        Data.PlaidItems.Add(item);
+        await SaveAsync();
+        return item;
+    }
+
+    public async Task RemovePlaidItemAsync(Guid id)
+    {
+        Data.PlaidItems.RemoveAll(x => x.Id == id);
+        await SaveAsync();
+    }
+
+    /// <summary>Folds bank transactions pulled from Plaid into the same Transactions list the
+    /// manual Rocket Money CSV import uses — same dedup-by-SourceKey and bill-matching pass,
+    /// so a bank-synced bill payment marks the bill Paid exactly like a CSV import would.</summary>
+    public async Task<int> ImportPlaidTransactionsAsync(List<Transaction> parsed)
+    {
+        var existing = Data.Transactions.Where(x => !string.IsNullOrWhiteSpace(x.SourceKey)).Select(x => x.SourceKey).ToHashSet();
+        var newlyImported = new List<Transaction>();
+        foreach (var transaction in parsed)
+        {
+            if (!existing.Add(transaction.SourceKey)) continue;
+            Data.Transactions.Add(transaction);
+            newlyImported.Add(transaction);
+        }
+        ReconcileImportedTransactions(newlyImported);
+        await SaveAsync();
+        return newlyImported.Count;
+    }
+
+    public async Task SetPlaidSyncCursorAsync(Guid itemId, string? cursor)
+    {
+        var item = Data.PlaidItems.FirstOrDefault(x => x.Id == itemId);
+        if (item is null) return;
+        item.SyncCursor = cursor;
+        item.LastSyncedAt = DateTime.Now;
+        await SaveAsync();
+    }
+
     public async Task SaveAsync()
     {
         await _lock.WaitAsync();

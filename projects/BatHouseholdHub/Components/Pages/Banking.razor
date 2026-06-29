@@ -1,0 +1,86 @@
+@page "/banking"
+@inject HouseholdStore Store
+@inject PlaidService Plaid
+@inject ActivePersonService ActivePerson
+@inject IJSRuntime JS
+
+<PageTitle>Banking</PageTitle>
+<section class="page-heading"><div><span class="kicker">CONNECTED ACCOUNTS</span><h1>Banking</h1><p>Link a bank so its transactions sync in automatically instead of a manual Rocket Money export each time.</p></div></section>
+
+@if (!Plaid.IsConfigured)
+{
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">NOT SET UP</span><h2>Plaid isn't configured yet</h2></div></div>
+        <p class="muted">Set <code>PLAID_CLIENT_ID</code> and <code>PLAID_SECRET</code> as environment variables on the server (see DEPLOY.md), then reload this page.</p>
+    </section>
+}
+else
+{
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">CONNECT</span><h2>Add a bank</h2></div></div>
+        <p class="muted">Opens Plaid's secure connect flow. Your bank login never touches our server — Plaid hands back a token, not your credentials.</p>
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <p class="due-soon">@StatusMessage</p>
+        }
+        <button class="button primary" disabled="@IsLinking" @onclick="StartLink">@(IsLinking ? "Opening…" : "＋ Connect a bank")</button>
+    </section>
+
+    <section class="panel" style="margin-top:24px">
+        <div class="panel-head"><div><span class="kicker">CONNECTED</span><h2>Linked accounts</h2></div></div>
+        <div class="bill-list">
+            @if (!Store.Data.PlaidItems.Any())
+            {
+                <p class="muted">No banks connected yet.</p>
+            }
+            else
+            {
+                @foreach (var item in Store.Data.PlaidItems)
+                {
+                    <div class="bill-row">
+                        <span class="bill-dot fixed"></span>
+                        <div class="bill-info">
+                            <strong>@item.InstitutionName</strong>
+                            <small>@item.Owner · @(item.LastSyncedAt is { } d ? $"last synced {d:MMM d, h:mm tt}" : "not synced yet")</small>
+                        </div>
+                        <button class="delete-button" title="Disconnect" @onclick="() => Disconnect(item.Id)">×</button>
+                    </div>
+                }
+            }
+        </div>
+    </section>
+}
+
+@code {
+    bool IsLinking;
+    string StatusMessage = "";
+
+    async Task StartLink()
+    {
+        IsLinking = true;
+        StatusMessage = "";
+        try
+        {
+            var linkToken = await Plaid.CreateLinkTokenAsync(ActivePerson.Current);
+            var result = await JS.InvokeAsync<PlaidLinkResult?>("householdPlaid.openLink", linkToken);
+            if (result is { PublicToken: { Length: > 0 } })
+            {
+                await Plaid.ExchangePublicTokenAsync(result.PublicToken, result.InstitutionName ?? "Bank", ActivePerson.Current);
+                StatusMessage = $"Connected {result.InstitutionName}. First sync runs within a few hours.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Couldn't connect: {ex.Message}";
+        }
+        finally { IsLinking = false; }
+    }
+
+    async Task Disconnect(Guid id) => await Store.RemovePlaidItemAsync(id);
+
+    class PlaidLinkResult
+    {
+        public string PublicToken { get; set; } = "";
+        public string? InstitutionName { get; set; }
+    }
+}

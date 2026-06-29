@@ -46,3 +46,32 @@ export VAPID_PRIVATE_KEY="..."
 Add those two lines to `~/.bashrc` (or wherever `deploy-batserver.sh` runs
 from) so they persist across reboots. Without them, the app still runs fine —
 the "Enable notifications" option in Quick Tools just stays unavailable.
+
+## Bank auto-sync (Plaid)
+
+The Banking page (`/banking`) connects a real bank account so transactions
+sync in automatically instead of manual Rocket Money CSV exports. Needs a
+free Plaid developer account:
+
+1. Sign up at https://dashboard.plaid.com/signup — the free tier includes
+   unlimited Sandbox use and a limited number of live ("Production") items,
+   enough for one household.
+2. From the Plaid dashboard, grab the `client_id` and the **Sandbox** secret
+   first (test with the fake bank logins Plaid provides — no real bank
+   credentials needed yet).
+3. Set host environment variables, same pattern as the push keys above:
+
+```bash
+export PLAID_CLIENT_ID="..."
+export PLAID_SECRET="..."       # the Sandbox secret, to start
+export PLAID_ENV="sandbox"      # switch to "production" + the Production secret when ready
+```
+
+4. Restart the container (`docker compose up -d --build` or
+   `~/deploy-batserver.sh`) so the new env vars are picked up.
+
+Without these set, `/banking` just shows "Plaid isn't configured yet" — the
+rest of the app is unaffected. A background job syncs connected accounts
+every 6 hours; synced transactions get the same auto-matching against bills
+that the CSV import uses, so a bank-confirmed bill payment still marks the
+bill Paid automatically.
