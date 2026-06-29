@@ -83,6 +83,19 @@ public class HouseholdStore
 
     public string UploadPath(Guid id) => Path.Combine(_uploadsFolder, id.ToString("N"));
 
+    public async Task AddQuickLogAsync(string text, string owner)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        Data.QuickLogs.Insert(0, new QuickLogEntry { Text = text.Trim(), Owner = owner });
+        await SaveAsync();
+    }
+
+    public async Task DeleteQuickLogAsync(Guid id)
+    {
+        Data.QuickLogs.RemoveAll(x => x.Id == id);
+        await SaveAsync();
+    }
+
     public async Task SaveAsync()
     {
         await _lock.WaitAsync();

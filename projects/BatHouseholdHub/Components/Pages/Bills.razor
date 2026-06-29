@@ -367,7 +367,13 @@ else
     </section>
 
     <section class="transaction-browser">
-        <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction gallery</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div><div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div></div>
+        <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction history</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div>
+            <div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div>
+            <div class="view-toggle">
+                <button class="@(CompactView ? "active" : "")" title="Compact list" @onclick='() => CompactView = true'>☰</button>
+                <button class="@(!CompactView ? "active" : "")" title="Card gallery" @onclick='() => CompactView = false'>▦</button>
+            </div>
+        </div>
 
         <div class="filter-panel panel">
             <label class="search-filter"><span>⌕</span><input @bind="SearchQuery" @bind:event="oninput" placeholder="Search merchant, description, category…" /></label>
@@ -383,6 +389,22 @@ else
 
         @if (!VisibleTransactions.Any())
         { <div class="empty-state"><span>⌕</span><h2>No matching transactions</h2><p>Try clearing a filter or widening the date range.</p></div> }
+        else if (CompactView)
+        {
+            <div class="transaction-list">
+            @foreach (var item in VisibleTransactions)
+            {
+                var reviewReason = ReviewReason(item);
+                <div class="transaction-row @(item.IsIncome ? "income-row" : "")">
+                    <span class="tx-icon @CategoryClass(item.Category)">@CategoryIcon(item.Category, item.IsIncome)</span>
+                    <div class="tx-info"><strong>@item.Description</strong><small>@item.Date.ToString("MMM d") · @item.Category · @item.Owner@if (reviewReason is not null) { <b class="review-sticker">@reviewReason</b> }</small></div>
+                    <b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b>
+                    <span class="row-actions"><button title="Edit transaction" class="icon-button" @onclick="() => EditTransaction(item)">✎</button><button title="Remove transaction" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></span>
+                </div>
+            }
+            </div>
+            @if (VisibleCount < FilteredCount) { <button class="button load-more" @onclick="() => VisibleCount += 60">Show 60 more</button> }
+        }
         else
         {
             <div class="transaction-gallery">
@@ -463,7 +485,6 @@ else
     Guid? EditingId;
     string StatusMessage = "";
     HouseholdFunds FundsDraft = new();
-    DateTime MonthCursor = new(DateTime.Today.Year, DateTime.Today.Month, 1);
     bool ShowIncomeForm;
     IncomeEvent IncomeDraft = new();
     CashflowWindow SelectedWindow = CashflowWindow.UntilNextPaycheck;
@@ -504,14 +525,6 @@ else
         .Select(c => new BillGroup(c, Store.Data.Bills.Where(x => x.IsActive && x.Category == c).OrderBy(x => x.DueDay).ToList(), Store.Data.Bills.Where(x => x.IsActive && x.Category == c).Sum(x => x.Amount)));
 
     decimal TotalMonthly => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
-
-    IEnumerable<DateTime?> BuildCells()
-    {
-        var daysInMonth = DateTime.DaysInMonth(MonthCursor.Year, MonthCursor.Month);
-        var leadingBlanks = (int)MonthCursor.DayOfWeek;
-        for (var i = 0; i < leadingBlanks; i++) yield return null;
-        for (var day = 1; day <= daysInMonth; day++) yield return new DateTime(MonthCursor.Year, MonthCursor.Month, day);
-    }
 
     async Task SaveFunds()
     {
@@ -641,6 +654,7 @@ else
     string OwnerFilter = "Everyone", SearchQuery = "", DateFilter = "This month", CategoryFilter = "All categories", AccountFilter = "All accounts", TypeFilter = "Everything", SortFilter = "Newest first";
     bool OnlyReview;
     int VisibleCount = 60;
+    bool CompactView = true;
     decimal LargeExpenseThreshold = 500;
     string[] Categories = ["Other", "Groceries", "Bills", "Dining", "Home", "Fun", "Transport", "Income"];
     IEnumerable<Transaction> Month => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year);

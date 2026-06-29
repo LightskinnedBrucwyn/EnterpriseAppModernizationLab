@@ -268,3 +268,37 @@ h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
 .category-pulse-row .progress{margin:0}
 .category-pulse-row b{font-size:13px;text-align:right}
 @media(max-width:720px){.category-pulse-row{grid-template-columns:90px 1fr 60px}}
+
+/* Quick Tools — floating calculator + quick-log widget, mounted globally in MainLayout */
+.quick-tools{position:fixed;right:22px;bottom:22px;z-index:60;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
+.quick-tools-fab{width:52px;height:52px;border-radius:50%;border:0;background:var(--organic);color:#fff;font-size:22px;box-shadow:0 8px 24px rgba(0,0,0,.25);cursor:pointer}
+.quick-tools-panel{width:300px;max-height:60vh;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 32px rgba(0,0,0,.2)}
+.quick-tools-tabs{display:flex;align-items:center;gap:6px}
+.quick-tools-tabs button{flex:1;border:0;background:rgba(0,0,0,.04);border-radius:9px;padding:8px;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted)}
+.quick-tools-tabs button.active{background:var(--organic);color:#fff}
+.quick-tools-close{flex:0 0 auto;background:transparent;font-size:18px}
+.quick-calc-input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font:inherit;outline:0}
+.quick-calc-result{font:700 28px 'Fraunces',serif;text-align:right;padding:6px 4px}
+.quick-calc-result.is-error{color:#b3261e}
+.quick-log-add{display:flex;gap:6px}
+.quick-log-add input{flex:1;border:1px solid var(--line);border-radius:9px;padding:9px;font:inherit;outline:0}
+.quick-log-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.quick-log-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px;border-radius:9px;background:rgba(0,0,0,.03)}
+.quick-log-row span{display:block;font-size:13px;font-weight:600}
+.quick-log-row small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+@media(max-width:520px){.quick-tools-panel{width:calc(100vw - 44px)}}
+
+/* Compact transaction list — default view so the data doesn't have to render as heavy cards forever */
+.view-toggle{display:flex;gap:4px}
+.view-toggle button{width:34px;height:34px;border:1px solid var(--line);border-radius:8px;background:transparent;cursor:pointer;color:var(--muted);font-size:15px}
+.view-toggle button.active{background:var(--organic);color:#fff;border-color:var(--organic)}
+.transaction-list{display:flex;flex-direction:column;gap:6px}
+.transaction-row{display:grid;grid-template-columns:36px 1fr auto auto;align-items:center;gap:12px;padding:10px 14px;border-radius:10px;background:#fff;border:1px solid var(--line)}
+.transaction-row .tx-icon{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px}
+.transaction-row .tx-info strong{display:block;font-size:14px}
+.transaction-row .tx-info small{display:block;color:var(--muted);font-size:12px}
+.transaction-row b{font:700 15px 'Fraunces',serif;white-space:nowrap}
+.transaction-row b.positive{color:var(--organic)}
+.transaction-row .row-actions{opacity:0;transition:opacity .15s}
+.transaction-row:hover .row-actions{opacity:1}
+@media(max-width:720px){.transaction-row{grid-template-columns:30px 1fr auto;}.transaction-row .row-actions{grid-column:1/-1;opacity:1;justify-content:flex-end}}

@@ -1,0 +1,177 @@
+@inject HouseholdStore Store
+@inject ActivePersonService ActivePerson
+
+<div class="quick-tools @(IsOpen ? "is-open" : "")">
+    @if (IsOpen)
+    {
+        <div class="quick-tools-panel panel">
+            <div class="quick-tools-tabs">
+                <button class="@(SubTab == "Calc" ? "active" : "")" @onclick='() => SubTab = "Calc"'>🧮 Calculator</button>
+                <button class="@(SubTab == "Log" ? "active" : "")" @onclick='() => SubTab = "Log"'>📝 Quick log</button>
+                <button class="icon-button quick-tools-close" @onclick="() => IsOpen = false">×</button>
+            </div>
+
+            @if (SubTab == "Calc")
+            {
+                <input class="quick-calc-input" @bind="Expression" @bind:event="oninput" placeholder="150 + 22.50 - 9.99" autofocus />
+                <div class="quick-calc-result @(CalcError ? "is-error" : "")">@CalcDisplay</div>
+                <small class="muted">+  −  ×  ÷  ( )  — everyday arithmetic, evaluated as you type.</small>
+            }
+            else
+            {
+                <div class="quick-log-add">
+                    <input @bind="NewLogText" @bind:event="oninput" @onkeydown="HandleLogKeydown" placeholder="Jot something down…" />
+                    <button class="button primary small" disabled="@string.IsNullOrWhiteSpace(NewLogText)" @onclick="AddLog">Log it</button>
+                </div>
+                <div class="quick-log-list">
+                    @if (!Store.Data.QuickLogs.Any())
+                    {
+                        <p class="muted">Nothing logged yet.</p>
+                    }
+                    else
+                    {
+                        @foreach (var entry in Store.Data.QuickLogs.Take(25))
+                        {
+                            <div class="quick-log-row">
+                                <div><span>@entry.Text</span><small>@entry.Owner · @entry.LoggedAt.ToString("MMM d, h:mm tt")</small></div>
+                                <button class="delete-button" title="Remove" @onclick="() => DeleteLog(entry.Id)">×</button>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+    <button class="quick-tools-fab" title="Calculator & quick log" @onclick="() => IsOpen = !IsOpen">@(IsOpen ? "×" : "✦")</button>
+</div>
+
+@code {
+    bool IsOpen;
+    string SubTab = "Calc";
+    string Expression = "";
+    string NewLogText = "";
+
+    bool CalcError;
+    string CalcDisplay => string.IsNullOrWhiteSpace(Expression) ? "—" : Evaluate();
+
+    string Evaluate()
+    {
+        try
+        {
+            var value = new CalcParser(Expression).ParseExpression();
+            CalcError = false;
+            return value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            CalcError = true;
+            return "?";
+        }
+    }
+
+    async Task AddLog()
+    {
+        if (string.IsNullOrWhiteSpace(NewLogText)) return;
+        await Store.AddQuickLogAsync(NewLogText, ActivePerson.Current);
+        NewLogText = "";
+    }
+
+    async Task HandleLogKeydown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddLog();
+    }
+
+    async Task DeleteLog(Guid id) => await Store.DeleteQuickLogAsync(id);
+
+    /// <summary>Minimal recursive-descent parser for +,-,*,/,() and decimals — enough for
+    /// everyday household math without pulling in a full expression-evaluator dependency.</summary>
+    class CalcParser(string text)
+    {
+        readonly string _text = text;
+        int _pos;
+
+        char? Peek => _pos < _text.Length ? _text[_pos] : null;
+        void SkipSpace() { while (Peek == ' ') _pos++; }
+
+        public decimal ParseExpression()
+        {
+            var value = ParseTerm();
+            while (true)
+            {
+                SkipSpace();
+                if (Peek is '+' or '-')
+                {
+                    var op = Peek;
+                    _pos++;
+                    var rhs = ParseTerm();
+                    value = op == '+' ? value + rhs : value - rhs;
+                }
+                else break;
+            }
+            SkipSpace();
+            if (_pos != _text.Length) throw new FormatException();
+            return value;
+        }
+
+        decimal ParseTerm()
+        {
+            var value = ParseFactor();
+            while (true)
+            {
+                SkipSpace();
+                if (Peek is '*' or '×' or '/' or '÷')
+                {
+                    var op = Peek;
+                    _pos++;
+                    var rhs = ParseFactor();
+                    value = op is '*' or '×' ? value * rhs : value / rhs;
+                }
+                else break;
+            }
+            return value;
+        }
+
+        decimal ParseFactor()
+        {
+            SkipSpace();
+            if (Peek == '-') { _pos++; return -ParseFactor(); }
+            if (Peek == '(')
+            {
+                _pos++;
+                var value = ParseExpression_Inner();
+                SkipSpace();
+                if (Peek != ')') throw new FormatException();
+                _pos++;
+                return value;
+            }
+            return ParseNumber();
+        }
+
+        decimal ParseExpression_Inner()
+        {
+            var value = ParseTerm();
+            while (true)
+            {
+                SkipSpace();
+                if (Peek is '+' or '-')
+                {
+                    var op = Peek;
+                    _pos++;
+                    var rhs = ParseTerm();
+                    value = op == '+' ? value + rhs : value - rhs;
+                }
+                else break;
+            }
+            return value;
+        }
+
+        decimal ParseNumber()
+        {
+            SkipSpace();
+            var start = _pos;
+            while (Peek is { } c && (char.IsDigit(c) || c == '.')) _pos++;
+            if (_pos == start) throw new FormatException();
+            return decimal.Parse(_text[start.._pos], System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+}

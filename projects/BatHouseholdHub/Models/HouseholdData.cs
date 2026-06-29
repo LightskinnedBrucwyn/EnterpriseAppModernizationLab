@@ -14,8 +14,20 @@ public class HouseholdData
     public List<UploadedFile> UploadedFiles { get; set; } = [];
     public List<DebtAccount> DebtAccounts { get; set; } = [];
     public List<IncomeEvent> IncomeEvents { get; set; } = [];
+    public List<QuickLogEntry> QuickLogs { get; set; } = [];
     public HouseholdFunds Funds { get; set; } = new();
     public HomeButlerSettings HomeButler { get; set; } = new();
+}
+
+/// <summary>A quick, timestamped note jotted from anywhere in the app — for things worth
+/// remembering that don't fit a bill, transaction, or grocery item (e.g. "called Affirm
+/// about due date" or "Jess picking up the package Thursday").</summary>
+public class QuickLogEntry
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Text { get; set; } = "";
+    public string Owner { get; set; } = "Shared";
+    public DateTime LoggedAt { get; set; } = DateTime.Now;
 }
 
 /// <summary>Connection settings for the local LLM ("Home Butler") used as a free,

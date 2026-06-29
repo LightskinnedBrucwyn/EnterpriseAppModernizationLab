@@ -9,6 +9,10 @@
     <main class="main-area">
         <article class="content @(IsHome ? "content-flush" : "")">@Body</article>
     </main>
+    @if (!IsHome)
+    {
+        <QuickTools />
+    }
 </div>
 
 <div id="blazor-error-ui">Something went sideways. <a href="" class="reload">Reload</a><a class="dismiss">×</a></div>
