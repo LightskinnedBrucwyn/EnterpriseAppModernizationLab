@@ -40,7 +40,7 @@
                 }
                 @if (dayBills.Count > 3)
                 {
-                    <span class="cal-pill-more" title="@string.Join(", ", dayBills.Skip(3).Select(x => x.Bill.Name))">+@(dayBills.Count - 3) more</span>
+                    <span class="cal-pill-more" title="@string.Join(", ", dayBills.Skip(3).Select(x => x.Bill.Name))">+@(dayBills.Count - 3)</span>
                 }
             </div>
         }
