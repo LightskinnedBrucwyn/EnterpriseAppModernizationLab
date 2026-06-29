@@ -33,6 +33,34 @@ A copy of this script lives at `deploy/deploy-batserver.sh` in the repo — keep
 Back up the `data` directory. Do not expose port 5188 to the public internet
 until authentication and an HTTPS reverse proxy are added.
 
+## HTTPS via Tailscale (required for push notifications)
+
+Service Workers — and therefore Web Push — only work in a secure context
+(HTTPS or `localhost`). Plain `http://letsgetrichbabe:5188` is an insecure
+origin, so `navigator.serviceWorker` doesn't exist there and the Alerts tab
+will always say push is unsupported, no matter what's done on the
+home-screen-icon side.
+
+Tailscale can terminate real HTTPS for the tailnet hostname without exposing
+anything to the public internet:
+
+1. One-time: in the Tailscale admin console, go to **Settings → HTTPS
+   Certificates** and enable it for the tailnet.
+2. On the host, run:
+
+```bash
+tailscale serve --bg https / http://127.0.0.1:5188
+```
+
+3. From then on, open `https://letsgetrichbabe.<tailnet-name>.ts.net`
+   (no port — `tailscale serve` listens on 443) instead of the old
+   `http://letsgetrichbabe:5188` URL. The serve config persists across
+   reboots once set.
+
+Update the home-screen icon (and any bookmarks) to the new `https://...`
+URL — an icon pointing at the old `http://` URL will never get push
+working since the page itself is loaded from an insecure origin.
+
 ## Push notifications (bill-due alerts)
 
 Push notifications need a one-time VAPID keypair set as host environment
