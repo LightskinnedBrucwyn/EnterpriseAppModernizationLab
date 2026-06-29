@@ -28,7 +28,14 @@
                     }
                     else if (PushStatus == "unsupported")
                     {
-                        <p class="muted">This browser doesn't support push notifications. On iPhone, add this app to your home screen first (Share → Add to Home Screen), then try again from there.</p>
+                        @if (IsStandalone)
+                        {
+                            <p class="muted">Push still isn't available here, even from the home screen icon. If you added this icon before notifications were set up, iOS may have saved an old version — remove it from your home screen and re-add it (Share → Add to Home Screen) to pick up the change.</p>
+                        }
+                        else
+                        {
+                            <p class="muted">This browser doesn't support push notifications. On iPhone, add this app to your home screen first (Share → Add to Home Screen), then open it from that icon instead of Safari.</p>
+                        }
                     }
                     else
                     {
@@ -76,10 +83,12 @@
     string Expression = "";
     string NewLogText = "";
     string PushStatus = "unsubscribed";
+    bool IsStandalone;
 
     async Task SelectAlerts()
     {
         SubTab = "Alerts";
+        IsStandalone = await JS.InvokeAsync<bool>("householdPush.isStandalone");
         var supported = await JS.InvokeAsync<bool>("householdPush.isSupported");
         PushStatus = supported ? await JS.InvokeAsync<string>("householdPush.getStatus") : "unsupported";
     }

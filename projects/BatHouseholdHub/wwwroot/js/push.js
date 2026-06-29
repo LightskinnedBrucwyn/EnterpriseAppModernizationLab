@@ -8,6 +8,8 @@ function urlBase64ToUint8Array(base64String) {
 window.householdPush = {
     isSupported: () => 'serviceWorker' in navigator && 'PushManager' in window,
 
+    isStandalone: () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true,
+
     getStatus: async () => {
         if (!window.householdPush.isSupported()) return 'unsupported';
         const reg = await navigator.serviceWorker.ready;
