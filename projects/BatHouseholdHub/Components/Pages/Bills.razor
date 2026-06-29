@@ -9,14 +9,16 @@
 <PageTitle>Bills & Money</PageTitle>
 <section class="page-heading">
     <div><span class="kicker">BILLS &amp; MONEY</span><h1>Bills and cashflow</h1><p>What we have, what's due, what's left, and everything that moved through the accounts. Check <a href="calendar">the calendar</a> for due dates laid out across the month.</p></div>
-    @if (Tab == "Overview")
+    @if (Tab == "Overview" || Tab == "Bills")
     { <button class="button primary" @onclick="() => ShowForm = !ShowForm">＋ Add bill</button> }
-    else
+    else if (Tab == "Transactions")
     { <button class="button primary" @onclick="OpenAddTxForm">＋ Add transaction</button> }
 </section>
 
 <div class="food-tabs">
     <button class="@(Tab == "Overview" ? "active" : "")" @onclick='() => Tab = "Overview"'>Overview</button>
+    <button class="@(Tab == "Bills" ? "active" : "")" @onclick='() => Tab = "Bills"'>Bills</button>
+    <button class="@(Tab == "Income" ? "active" : "")" @onclick='() => Tab = "Income"'>Income</button>
     <button class="@(Tab == "Transactions" ? "active" : "")" @onclick='() => Tab = "Transactions"'>Transactions</button>
 </div>
 
@@ -68,6 +70,71 @@
         <div class="stat-card sage"><span>Amount left after buffer</span><strong>@Summary.AmountLeftAfterBuffer.ToString("C")</strong></div>
     </section>
 
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">UPCOMING BILLS</span><h2>Coming up</h2></div><button class="text-button" @onclick='() => Tab = "Bills"'>See all bills →</button></div>
+        @{ var upcomingOnly = Summary.UnpaidBills.Where(x => x.EffectiveStatus(DateTime.Today) == BillStatus.Upcoming).OrderBy(x => x.DueDay).Take(5).ToList(); }
+        @if (!upcomingOnly.Any())
+        {
+            <p class="muted">Nothing unpaid right now.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var bill in upcomingOnly)
+                { @BillRow(bill) }
+            </div>
+        }
+    </section>
+
+    <section class="panel goal-panel">
+        @if (Goal is null || EditingGoal)
+        {
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
+            <div class="form-grid">
+                <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
+                <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
+                <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
+            </div>
+            <div class="form-actions">
+                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
+                @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
+            </div>
+        }
+        else
+        {
+            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
+            <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
+            <div class="progress"><i style="width:@GoalPercent%"></i></div>
+            <p>@GoalPercent% there. Every bit counts.</p>
+            <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
+        }
+    </section>
+
+    <section class="panel upload-panel">
+        <div class="panel-head"><div><span class="kicker">HOUSEHOLD INBOX</span><h2>Drop anything here</h2><p class="muted">Receipts, lease docs, loan paperwork — whatever needs a home.</p></div></div>
+        <div class="upload-controls">
+            <input @bind="UploadNote" @bind:event="oninput" placeholder="What is this? (optional note)" />
+            <label class="button primary upload-button">@(IsUploading ? "Uploading…" : "Choose file")<InputFile OnChange="UploadFile" disabled="@IsUploading" /></label>
+        </div>
+        @if (Store.Data.UploadedFiles.Count > 0)
+        {
+            <div class="upload-list">
+                @foreach (var file in Store.Data.UploadedFiles.OrderByDescending(x => x.UploadedAt))
+                {
+                    <div class="upload-row">
+                        <a href="/uploads/@file.Id" target="_blank">@file.FileName</a>
+                        <small>@(string.IsNullOrWhiteSpace(file.Note) ? "" : file.Note + " · ")@(file.SizeBytes / 1024) KB · @file.UploadedAt.ToLocalTime().ToString("MMM d")</small>
+                        <button class="delete-button" title="Remove" @onclick="() => DeleteUpload(file.Id)">×</button>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
+}
+else if (Tab == "Bills")
+{
     @if (ShowForm)
     {
         <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
@@ -124,95 +191,28 @@
     }
 
     <section class="panel">
-        <div class="panel-head"><div><span class="kicker">UPCOMING BILLS</span><h2>Coming up</h2></div></div>
-        @{ var upcomingOnly = Summary.UnpaidBills.Where(x => x.EffectiveStatus(DateTime.Today) == BillStatus.Upcoming).OrderBy(x => x.DueDay).Take(8).ToList(); }
-        @if (!upcomingOnly.Any())
+        <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / cycle</small></b></div>
+        @foreach (var group in Groups)
         {
-            <p class="muted">Nothing unpaid right now.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var bill in upcomingOnly)
-                { @BillRow(bill) }
-            </div>
-        }
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">BILL CALENDAR</span><h2>@MonthCursor.ToString("MMMM yyyy")</h2></div>
-            <div class="cal-nav small"><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(-1)">←</button><button class="text-button" @onclick="() => MonthCursor = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1)">Today</button><button class="text-button" @onclick="() => MonthCursor = MonthCursor.AddMonths(1)">→</button></div>
-        </div>
-        <div class="month-calendar">
-            @foreach (var label in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
-            { <div class="cal-weekday">@label</div> }
-            @foreach (var cell in BuildCells())
-            {
-                if (cell is null)
+            <div class="bill-group">
+                <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span></div><b>@group.Total.ToString("C")</b></div>
+                @if (!group.Bills.Any())
                 {
-                    <div class="cal-day empty"></div>
+                    <p class="muted">Nothing in this category yet.</p>
                 }
                 else
                 {
-                    var day = cell.Value;
-                    <div class="cal-day @(day == DateTime.Today ? "today" : "")">
-                        <span class="cal-day-num">@day.Day</span>
-                        @foreach (var item in BillCal.BillsOnDay(MonthCursor.Year, MonthCursor.Month, day.Day))
-                        {
-                            <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
-                        }
+                    <div class="bill-list">
+                        @foreach (var bill in group.Bills)
+                        { @BillRow(bill) }
                     </div>
                 }
-            }
-        </div>
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">PENDING PAYMENTS</span><h2>Already pending</h2></div></div>
-        <p class="muted">Money that's already committed, even if the bank still shows it sitting in the account.</p>
-        @if (!Summary.PendingBills.Any())
-        {
-            <p class="muted">Nothing marked pending.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var bill in Summary.PendingBills)
-                { @BillRow(bill) }
             </div>
         }
     </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">RESERVED MONEY</span><h2>Set aside, not spendable</h2></div></div>
-        @if (!Summary.ReservedBills.Any())
-        {
-            <p class="muted">Nothing reserved right now.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var bill in Summary.ReservedBills)
-                { @BillRow(bill) }
-            </div>
-        }
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">DELAYED</span><h2>Waiting on income to arrive</h2></div></div>
-        @if (!Summary.DelayedBills.Any())
-        {
-            <p class="muted">Nothing waiting on income right now.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var bill in Summary.DelayedBills)
-                { @BillRow(bill) }
-            </div>
-        }
-    </section>
-
+}
+else if (Tab == "Income")
+{
     <section class="panel">
         <div class="panel-head"><div><span class="kicker">INCOME</span><h2>Income timeline</h2></div><button class="button magic small" @onclick="() => ShowIncomeForm = !ShowIncomeForm">＋ Add income</button></div>
         @if (ShowIncomeForm)
@@ -256,120 +256,6 @@
             </div>
         }
     </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">DEBT</span><h2>Debt payments</h2></div></div>
-        @{ var debtBills = Store.Data.Bills.Where(x => x.IsActive && x.Category == BillCategory.DebtPayment).OrderBy(x => x.DueDay).ToList(); }
-        @if (!debtBills.Any())
-        {
-            <p class="muted">No debt payments yet.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var bill in debtBills)
-                { @BillRow(bill) }
-            </div>
-        }
-    </section>
-
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">NEEDS REVIEW</span><h2>Imported transactions we couldn't match</h2></div></div>
-        @if (!Summary.NeedsReviewTransactions.Any())
-        {
-            <p class="muted">Nothing needs review.</p>
-        }
-        else
-        {
-            <div class="bill-list">
-                @foreach (var transaction in Summary.NeedsReviewTransactions)
-                {
-                    <div class="bill-row">
-                        <span class="bill-dot fixed"></span>
-                        <div class="bill-info"><strong>@transaction.Description</strong><small>@transaction.Date.ToString("MMM d") · @transaction.Account</small></div>
-                        <span class="badge status-review">Needs review</span>
-                        <b>@transaction.Amount.ToString("C")</b>
-                        <span class="row-actions">
-                            <select @onchange="e => LinkTransaction(transaction, e.Value)">
-                                <option value="">Link to a bill…</option>
-                                @foreach (var bill in Store.Data.Bills.Where(x => x.IsActive))
-                                { <option value="@bill.Id">@bill.Name</option> }
-                            </select>
-                            <button class="text-button" @onclick="() => ResolveReview(transaction)">Resolve</button>
-                        </span>
-                    </div>
-                }
-            </div>
-        }
-    </section>
-
-    <section class="panel" style="margin-top:24px">
-        <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / cycle</small></b></div>
-        @foreach (var group in Groups)
-        {
-            <div class="bill-group">
-                <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span></div><b>@group.Total.ToString("C")</b></div>
-                @if (!group.Bills.Any())
-                {
-                    <p class="muted">Nothing in this category yet.</p>
-                }
-                else
-                {
-                    <div class="bill-list">
-                        @foreach (var bill in group.Bills)
-                        { @BillRow(bill) }
-                    </div>
-                }
-            </div>
-        }
-    </section>
-
-    <section class="panel upload-panel">
-        <div class="panel-head"><div><span class="kicker">HOUSEHOLD INBOX</span><h2>Drop anything here</h2><p class="muted">Receipts, lease docs, loan paperwork — whatever needs a home.</p></div></div>
-        <div class="upload-controls">
-            <input @bind="UploadNote" @bind:event="oninput" placeholder="What is this? (optional note)" />
-            <label class="button primary upload-button">@(IsUploading ? "Uploading…" : "Choose file")<InputFile OnChange="UploadFile" disabled="@IsUploading" /></label>
-        </div>
-        @if (Store.Data.UploadedFiles.Count > 0)
-        {
-            <div class="upload-list">
-                @foreach (var file in Store.Data.UploadedFiles.OrderByDescending(x => x.UploadedAt))
-                {
-                    <div class="upload-row">
-                        <a href="/uploads/@file.Id" target="_blank">@file.FileName</a>
-                        <small>@(string.IsNullOrWhiteSpace(file.Note) ? "" : file.Note + " · ")@(file.SizeBytes / 1024) KB · @file.UploadedAt.ToLocalTime().ToString("MMM d")</small>
-                        <button class="delete-button" title="Remove" @onclick="() => DeleteUpload(file.Id)">×</button>
-                    </div>
-                }
-            </div>
-        }
-    </section>
-
-    <section class="panel goal-panel">
-        @if (Goal is null || EditingGoal)
-        {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
-            <div class="form-grid">
-                <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
-                <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
-                <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
-            </div>
-            <div class="form-actions">
-                <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
-                @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
-            </div>
-        }
-        else
-        {
-            <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
-            <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
-            <div class="progress"><i style="width:@GoalPercent%"></i></div>
-            <p>@GoalPercent% there. Every bit counts.</p>
-            <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
-        }
-    </section>
-
-    <aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
 }
 else
 {
@@ -393,6 +279,32 @@ else
     @if (RocketResult is not null)
     {
         <div class="import-message success"><strong>✓ Rocket Money is up to date</strong><span>@RocketResult.Imported.ToString("N0") transactions imported · @RocketResult.ExcludedTransfers.ToString("N0") transfers excluded · @RocketResult.AccountCount accounts · @RocketResult.EarliestDate?.ToString("MMM yyyy")–@RocketResult.LatestDate?.ToString("MMM yyyy")</span></div>
+    }
+
+    @if (Summary.NeedsReviewTransactions.Any())
+    {
+        <section class="panel">
+            <div class="panel-head"><div><span class="kicker">NEEDS REVIEW</span><h2>Imported transactions we couldn't match</h2></div></div>
+            <div class="bill-list">
+                @foreach (var transaction in Summary.NeedsReviewTransactions)
+                {
+                    <div class="bill-row">
+                        <span class="bill-dot fixed"></span>
+                        <div class="bill-info"><strong>@transaction.Description</strong><small>@transaction.Date.ToString("MMM d") · @transaction.Account</small></div>
+                        <span class="badge status-review">Needs review</span>
+                        <b>@transaction.Amount.ToString("C")</b>
+                        <span class="row-actions">
+                            <select @onchange="e => LinkTransaction(transaction, e.Value)">
+                                <option value="">Link to a bill…</option>
+                                @foreach (var bill in Store.Data.Bills.Where(x => x.IsActive))
+                                { <option value="@bill.Id">@bill.Name</option> }
+                            </select>
+                            <button class="text-button" @onclick="() => ResolveReview(transaction)">Resolve</button>
+                        </span>
+                    </div>
+                }
+            </div>
+        </section>
     }
 
     @if (ShowTxForm)

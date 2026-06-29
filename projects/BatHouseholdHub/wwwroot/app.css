@@ -216,7 +216,7 @@ h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
     --sidebar-muted:#6f6a63;
     --gold:#b8902c;--violet:#2b2b2b;--noir:#0a0a0a;
     --orange:#b5532f;--glass-blur:0px;
-    background:#faf7f1;
+    background:#faf7f1;color:#1c1c1c;
 }
 .app-shell:not(.is-home) .topnav{background:rgba(255,255,255,.92);border-bottom:1px solid var(--line);box-shadow:none}
 .app-shell:not(.is-home) .topnav nav a:hover,.app-shell:not(.is-home) .topnav nav a.active{background:rgba(47,107,70,.08)}
@@ -239,3 +239,12 @@ h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
 .app-shell:not(.is-home) .badge.status-reserved{background:#e9e7f7;color:#5b4fc4}
 .app-shell:not(.is-home) .badge.status-delayed{background:#f3e3fa;color:#8a3fae}
 .app-shell:not(.is-home) .badge.status-skipped{background:var(--line);color:var(--muted)}
+
+/* Bill-row mobile overflow fix: stack onto multiple lines instead of forcing a too-wide grid */
+@media(max-width:720px){
+    .bill-row{grid-template-columns:14px 1fr;column-gap:10px;row-gap:8px}
+    .bill-row .badge{grid-column:2}
+    .bill-row b{grid-column:2}
+    .bill-row .row-actions{grid-column:1/-1;flex-wrap:wrap}
+    .row-actions{flex-wrap:wrap}
+}
