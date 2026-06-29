@@ -18,7 +18,10 @@ docker compose up -d --build
 docker compose ps
 ```
 
-Open `http://letsgetrichbabe:5188` from another device on the tailnet.
+Open `https://letsgetrichbabe.tail447013.ts.net` from another device on the
+tailnet (any device logged into the same tailnet can reach it — see the HTTPS
+section below for how this is set up). The plain `http://letsgetrichbabe:5188`
+URL still works too, but push notifications require the HTTPS one.
 
 For later updates, run the deploy script:
 
@@ -42,24 +45,27 @@ will always say push is unsupported, no matter what's done on the
 home-screen-icon side.
 
 Tailscale can terminate real HTTPS for the tailnet hostname without exposing
-anything to the public internet:
+anything to the public internet. This is already set up — `tailscale serve`
+runs as a reverse proxy in front of the existing container (no duplicate app,
+same `http://127.0.0.1:5188` backend), and any device on the tailnet (not
+just the host) can reach the HTTPS URL the same way it reached the old one.
 
-1. One-time: in the Tailscale admin console, go to **Settings → HTTPS
-   Certificates** and enable it for the tailnet.
-2. On the host, run:
+It was set up like this, for reference if it ever needs redoing (e.g. after
+a host OS reinstall):
 
 ```bash
-tailscale serve --bg https / http://127.0.0.1:5188
+sudo tailscale set --operator=$USER   # one-time, avoids needing sudo below
+tailscale serve --bg http://127.0.0.1:5188
+tailscale serve status                # confirms the proxy config
 ```
 
-3. From then on, open `https://letsgetrichbabe.<tailnet-name>.ts.net`
-   (no port — `tailscale serve` listens on 443) instead of the old
-   `http://letsgetrichbabe:5188` URL. The serve config persists across
-   reboots once set.
+The tailnet's domain is `tail447013.ts.net`, so the app is reachable at
+`https://letsgetrichbabe.tail447013.ts.net` (no port — serve listens on
+443). The serve config persists across reboots once set.
 
-Update the home-screen icon (and any bookmarks) to the new `https://...`
-URL — an icon pointing at the old `http://` URL will never get push
-working since the page itself is loaded from an insecure origin.
+Update home-screen icons (and any bookmarks) on every device to the new
+`https://...` URL — an icon pointing at the old `http://` URL will never
+get push working since the page itself is loaded from an insecure origin.
 
 ## Push notifications (bill-due alerts)
 
