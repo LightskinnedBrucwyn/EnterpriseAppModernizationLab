@@ -30,6 +30,7 @@ builder.Services.AddScoped<BillCalendarService>();
 builder.Services.AddScoped<ActivePersonService>();
 builder.Services.AddHostedService<RecurringTransactionService>();
 builder.Services.AddHostedService<HouseholdBackupService>();
+builder.Services.AddHostedService<PushNotificationService>();
 builder.Services.AddHttpClient<ProductLookupService>();
 builder.Services.AddHttpClient<OpenGraphScraperService>();
 builder.Services.AddHttpClient<HomeButlerService>();
@@ -62,4 +63,22 @@ app.MapGet("/uploads/{id:guid}", (Guid id, HouseholdStore store) =>
     return Results.File(store.UploadPath(id), record.ContentType, record.FileName);
 });
 
+app.MapGet("/api/push/public-key", (IConfiguration config) =>
+    Results.Text(config["VAPID_PUBLIC_KEY"] ?? ""));
+
+app.MapPost("/api/push/subscribe", async (PushSubscribeRequest req, HouseholdStore store) =>
+{
+    await store.AddPushSubscriptionAsync(req.Endpoint, req.P256dh, req.Auth, req.Owner ?? "Shared");
+    return Results.Ok();
+});
+
+app.MapPost("/api/push/unsubscribe", async (PushUnsubscribeRequest req, HouseholdStore store) =>
+{
+    await store.RemovePushSubscriptionAsync(req.Endpoint);
+    return Results.Ok();
+});
+
 app.Run();
+
+record PushSubscribeRequest(string Endpoint, string P256dh, string Auth, string? Owner);
+record PushUnsubscribeRequest(string Endpoint);

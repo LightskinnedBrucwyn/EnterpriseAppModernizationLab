@@ -297,7 +297,8 @@ h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
 .quick-log-row{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;padding:8px;border-radius:9px;background:rgba(0,0,0,.03)}
 .quick-log-row span{display:block;font-size:13px;font-weight:600}
 .quick-log-row small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
-@media(max-width:520px){.quick-tools-panel{width:calc(100vw - 44px)}}
+.quick-alerts{display:flex;flex-direction:column;gap:10px}
+@media(max-width:520px){.quick-tools-panel{width:calc(100vw - 44px)}.quick-tools-tabs button{font-size:11px;padding:8px 4px}}
 
 /* Compact transaction list — default view so the data doesn't have to render as heavy cards forever */
 .view-toggle{display:flex;gap:4px}

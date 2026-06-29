@@ -1,5 +1,6 @@
 @inject HouseholdStore Store
 @inject ActivePersonService ActivePerson
+@inject IJSRuntime JS
 
 <div class="quick-tools @(IsOpen ? "is-open" : "")">
     @if (IsOpen)
@@ -8,10 +9,34 @@
             <div class="quick-tools-tabs">
                 <button class="@(SubTab == "Calc" ? "active" : "")" @onclick='() => SubTab = "Calc"'>🧮 Calculator</button>
                 <button class="@(SubTab == "Log" ? "active" : "")" @onclick='() => SubTab = "Log"'>📝 Quick log</button>
+                <button class="@(SubTab == "Alerts" ? "active" : "")" @onclick='SelectAlerts'>🔔 Alerts</button>
                 <button class="icon-button quick-tools-close" @onclick="() => IsOpen = false">×</button>
             </div>
 
-            @if (SubTab == "Calc")
+            @if (SubTab == "Alerts")
+            {
+                <div class="quick-alerts">
+                    <p class="muted">Get a phone notification when a bill is due within 2 days — no need to keep the app open.</p>
+                    @if (PushStatus == "subscribed")
+                    {
+                        <p class="due-soon">🔔 Notifications are on for this device.</p>
+                        <button class="button small" @onclick="DisablePush">Turn off</button>
+                    }
+                    else if (PushStatus == "unconfigured")
+                    {
+                        <p class="muted">Not set up on the server yet — ask Trey to add VAPID keys.</p>
+                    }
+                    else if (PushStatus == "unsupported")
+                    {
+                        <p class="muted">This browser doesn't support push notifications. On iPhone, add this app to your home screen first (Share → Add to Home Screen), then try again from there.</p>
+                    }
+                    else
+                    {
+                        <button class="button primary small" @onclick="EnablePush">Enable notifications</button>
+                    }
+                </div>
+            }
+            else if (SubTab == "Calc")
             {
                 <input class="quick-calc-input" @bind="Expression" @bind:event="oninput" placeholder="150 + 22.50 - 9.99" autofocus />
                 <div class="quick-calc-result @(CalcError ? "is-error" : "")">@CalcDisplay</div>
@@ -50,6 +75,17 @@
     string SubTab = "Calc";
     string Expression = "";
     string NewLogText = "";
+    string PushStatus = "unsubscribed";
+
+    async Task SelectAlerts()
+    {
+        SubTab = "Alerts";
+        var supported = await JS.InvokeAsync<bool>("householdPush.isSupported");
+        PushStatus = supported ? await JS.InvokeAsync<string>("householdPush.getStatus") : "unsupported";
+    }
+
+    async Task EnablePush() => PushStatus = await JS.InvokeAsync<string>("householdPush.subscribe", ActivePerson.Current);
+    async Task DisablePush() => PushStatus = await JS.InvokeAsync<string>("householdPush.unsubscribe");
 
     bool CalcError;
     string CalcDisplay => string.IsNullOrWhiteSpace(Expression) ? "—" : Evaluate();

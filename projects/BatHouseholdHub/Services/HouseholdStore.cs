@@ -122,6 +122,29 @@ public class HouseholdStore
         await SaveAsync();
     }
 
+    public async Task AddPushSubscriptionAsync(string endpoint, string p256dh, string auth, string owner)
+    {
+        if (Data.PushSubscriptions.Any(x => x.Endpoint == endpoint)) return;
+        Data.PushSubscriptions.Add(new PushSubscriptionRecord { Endpoint = endpoint, P256dh = p256dh, Auth = auth, Owner = owner });
+        await SaveAsync();
+    }
+
+    public async Task RemovePushSubscriptionAsync(string endpoint)
+    {
+        Data.PushSubscriptions.RemoveAll(x => x.Endpoint == endpoint);
+        await SaveAsync();
+    }
+
+    /// <summary>Marks a bill as already notified for a given due date so the nightly push
+    /// check doesn't re-send the same reminder every run until the bill is paid.</summary>
+    public async Task MarkBillNotifiedAsync(string key)
+    {
+        if (Data.NotifiedBillKeys.Contains(key)) return;
+        Data.NotifiedBillKeys.Add(key);
+        if (Data.NotifiedBillKeys.Count > 500) Data.NotifiedBillKeys.RemoveRange(0, Data.NotifiedBillKeys.Count - 500);
+        await SaveAsync();
+    }
+
     public async Task SaveAsync()
     {
         await _lock.WaitAsync();

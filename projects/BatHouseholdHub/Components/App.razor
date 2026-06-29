@@ -9,8 +9,17 @@
     <link rel="stylesheet" href="app.css?v=@AssetVersion" />
     <link rel="stylesheet" href="BatHouseholdHub.styles.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="images/icon-192.png" />
+    <meta name="theme-color" content="#05070a" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Household Hub" />
     <script>
         document.documentElement.setAttribute('data-theme', 'dark');
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => navigator.serviceWorker.register('service-worker.js'));
+        }
     </script>
     <HeadOutlet @rendermode="InteractiveServer" />
 </head>
@@ -21,6 +30,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.clouds.min.js"></script>
     <script src="js/vanta-clouds.js"></script>
+    <script src="js/push.js"></script>
 </body>
 
 </html>

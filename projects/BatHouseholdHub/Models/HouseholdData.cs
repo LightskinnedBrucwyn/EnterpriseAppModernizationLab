@@ -15,8 +15,23 @@ public class HouseholdData
     public List<DebtAccount> DebtAccounts { get; set; } = [];
     public List<IncomeEvent> IncomeEvents { get; set; } = [];
     public List<QuickLogEntry> QuickLogs { get; set; } = [];
+    public List<PushSubscriptionRecord> PushSubscriptions { get; set; } = [];
+    public List<string> NotifiedBillKeys { get; set; } = [];
     public HouseholdFunds Funds { get; set; } = new();
     public HomeButlerSettings HomeButler { get; set; } = new();
+}
+
+/// <summary>A browser's Web Push subscription (endpoint + encryption keys), captured once
+/// the household enables notifications, so the server can wake the phone for bills due soon
+/// without anyone having the app open.</summary>
+public class PushSubscriptionRecord
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Endpoint { get; set; } = "";
+    public string P256dh { get; set; } = "";
+    public string Auth { get; set; } = "";
+    public string Owner { get; set; } = "Shared";
+    public DateTime CreatedAt { get; set; } = DateTime.Now;
 }
 
 /// <summary>A quick, timestamped note jotted from anywhere in the app — for things worth

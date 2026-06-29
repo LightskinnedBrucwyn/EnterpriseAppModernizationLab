@@ -32,3 +32,17 @@ A copy of this script lives at `deploy/deploy-batserver.sh` in the repo — keep
 
 Back up the `data` directory. Do not expose port 5188 to the public internet
 until authentication and an HTTPS reverse proxy are added.
+
+## Push notifications (bill-due alerts)
+
+Push notifications need a one-time VAPID keypair set as host environment
+variables before `docker compose up` picks them up:
+
+```bash
+export VAPID_PUBLIC_KEY="..."
+export VAPID_PRIVATE_KEY="..."
+```
+
+Add those two lines to `~/.bashrc` (or wherever `deploy-batserver.sh` runs
+from) so they persist across reboots. Without them, the app still runs fine —
+the "Enable notifications" option in Quick Tools just stays unavailable.
