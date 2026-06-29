@@ -1,4 +1,6 @@
 @page "/shopping-tracker"
+@using System.Text.RegularExpressions
+@using System.Globalization
 @inject HouseholdStore Store
 @inject ProductLookupService Lookup
 @inject OpenGraphScraperService Scraper
@@ -35,9 +37,9 @@
 </section>
 
 <section class="capture-bar">
-    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Paste a link, or paste a whole cart — one link per line — and we'll try to pull the name, price, and photo for each automatically.</small></div>
-    <textarea @bind="QuickUrl" @bind:event="oninput" rows="2" placeholder="Paste product link(s) here, one per line…" disabled="@IsLookingUp"></textarea>
-    <button class="button primary" disabled="@(ValidLinkCount == 0 || IsLookingUp)" @onclick="CaptureLink">@(IsLookingUp ? "Looking it up…" : ValidLinkCount > 1 ? $"Make {ValidLinkCount} cards →" : "Make card →")</button>
+    <div><span class="kicker">FOUND SOMETHING?</span><strong>Capture this find</strong><small>Paste a link, several links (one per line), or just select-all and paste your whole Amazon cart page — we'll figure out the items either way.</small></div>
+    <textarea @bind="QuickUrl" @bind:event="oninput" rows="2" placeholder="Paste a link, a list of links, or your whole cart's text here…" disabled="@IsLookingUp"></textarea>
+    <button class="button primary" disabled="@((ValidLinkCount == 0 && !LooksLikeCartPaste) || IsLookingUp)" @onclick="CaptureLink">@CaptureButtonLabel</button>
 </section>
 
 @if (!string.IsNullOrWhiteSpace(StatusMessage))
@@ -130,6 +132,12 @@ else
     IEnumerable<PurchaseIdea> Filtered => string.IsNullOrWhiteSpace(Search) ? Store.Data.PurchaseIdeas : Store.Data.PurchaseIdeas.Where(x => $"{x.Name} {x.Category} {x.Owner} {x.Notes}".Contains(Search, StringComparison.OrdinalIgnoreCase));
     IEnumerable<string> QuickLinks => QuickUrl.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Where(IsWebUrl).Distinct();
     int ValidLinkCount => QuickLinks.Count();
+    bool LooksLikeCartPaste => Regex.IsMatch(QuickUrl, @"\$[\d,]+\.\d{2}") &&
+        QuickUrl.Split('\n').Select(l => l.Trim()).Any(l => l.Length > 0 && !IsWebUrl(l));
+    string CaptureButtonLabel => IsLookingUp ? "Looking it up…"
+        : LooksLikeCartPaste ? "Add items from cart →"
+        : ValidLinkCount > 1 ? $"Make {ValidLinkCount} cards →"
+        : "Make card →";
     string ShoppingSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(Search) ? "shopping ideas" : Search)}";
     void OpenAddForm() { Draft = new(); EditingId = null; ShowForm = true; }
     void ClearForm() { var keepEditing = EditingId; var id = Draft.Id; Draft = new() { Id = id }; EditingId = keepEditing; }
@@ -194,6 +202,27 @@ else
     }
     async Task CaptureLink()
     {
+        if (LooksLikeCartPaste)
+        {
+            LastRemoved = null;
+            LookupNote = "";
+            StatusMessage = "";
+            var parsed = ParseCartText(QuickUrl, out var sharedLink);
+            QuickUrl = "";
+            if (parsed.Count == 0)
+            {
+                LookupNote = "Couldn't find any items in that text — try pasting product links instead.";
+                return;
+            }
+            foreach (var (name, price) in parsed)
+            {
+                Store.Data.PurchaseIdeas.Add(new PurchaseIdea { Name = name, Price = price, ProductUrl = sharedLink ?? "" });
+            }
+            await Store.SaveAsync();
+            StatusMessage = $"Added {parsed.Count} item{(parsed.Count == 1 ? "" : "s")} parsed from your cart text — check prices and links below.";
+            return;
+        }
+
         var links = QuickLinks.ToList();
         if (links.Count == 0) return;
         LastRemoved = null;
@@ -260,6 +289,54 @@ else
         }
         return (result.Success, source, result.Error ?? "");
     }
+    static readonly string[] CartNoiseLines =
+    {
+        @"^items$", @"^\(\$[\d.,]+\s*/\s*\w+\)$", @"^(Tomorrow|Two-Day|One-Day)$",
+        @"^FREE delivery", @"^FREE Returns$", @"^In Stock$", @"^Quantity is \d+$",
+        @"^\d+$", @"^Alexa Ask a question$", @"^Save for later$", @"^Delete$", @"^Share$",
+        @"^\d+\+?\s*bought in (the )?past month$", @"^#\d+\s", @"^in\s", @"^Save \d+%",
+        @"^Recycled materials", @"^Exclusive Prime price$", @"^Subscribe (&|and) Save",
+        @"^Order within"
+    };
+
+    // Amazon's cart copy/paste repeats each title twice (once full, once truncated for
+    // accessibility) with no separator, e.g. "Long Title HereLong Title H…" — detect the
+    // repeat by finding where the line's own opening characters reappear.
+    static string DedupTitle(string line)
+    {
+        var anchorLen = Math.Min(20, line.Length / 2);
+        if (anchorLen < 8) return line;
+        var idx = line.IndexOf(line[..anchorLen], anchorLen, StringComparison.Ordinal);
+        return (idx > 0 ? line[..idx] : line.TrimEnd('…')).Trim();
+    }
+
+    static List<(string Name, decimal Price)> ParseCartText(string text, out string? link)
+    {
+        link = null;
+        var items = new List<(string Name, decimal Price)>();
+        string? currentTitle = null;
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.Trim();
+            if (line.Length == 0) continue;
+            if (IsWebUrl(line)) { link ??= line; continue; }
+            var priceMatch = Regex.Match(line, @"^\$[\d,]+\.\d{2}$");
+            if (priceMatch.Success)
+            {
+                if (currentTitle is not null)
+                {
+                    items.Add((currentTitle, decimal.Parse(line.TrimStart('$').Replace(",", ""), CultureInfo.InvariantCulture)));
+                    currentTitle = null;
+                }
+                continue;
+            }
+            if (CartNoiseLines.Any(p => Regex.IsMatch(line, p, RegexOptions.IgnoreCase))) continue;
+            if (currentTitle is null && line.Length > 12) currentTitle = DedupTitle(line);
+        }
+        if (currentTitle is not null) items.Add((currentTitle, 0));
+        return items;
+    }
+
     static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     static string CleanUrl(string value) => IsWebUrl(value) ? value.Trim() : "";
     static int PriorityRank(string value) => value switch { "Need soon" => 0, "Would be nice" => 1, _ => 2 };
