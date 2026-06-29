@@ -181,3 +181,22 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .success-toast{background:var(--paper);border:1px solid var(--line);color:var(--organic)}
 .import-message.success{background:var(--paper);border-color:var(--line)}
 .import-message.error{background:var(--paper);border-color:var(--line);color:#ff8a8a}
+
+.brand small{font-size:11px;letter-spacing:.16em}
+.brand-mark{font-size:18px}
+.topnav nav a{white-space:nowrap;flex:none}
+@media(max-width:880px){.topnav nav{gap:2px}.topnav nav a{padding:9px 12px;font-size:13px}}
+.food-tabs{overflow-x:auto;flex-wrap:nowrap;-ms-overflow-style:none;scrollbar-width:none}
+.food-tabs::-webkit-scrollbar{display:none}
+.food-tabs button{white-space:nowrap;flex:none}
+.cal-nav{overflow-x:auto;flex-wrap:nowrap}
+
+/* Zara/H&M-style structured pass: sharper boxes, uppercase labels, safe mobile wrapping */
+.kicker{text-transform:uppercase;letter-spacing:.16em;font-size:11px;font-weight:700;color:var(--muted)}
+.kicker::before{background:var(--ink)}
+.hero h1,.page-heading h1{font-weight:600;overflow-wrap:break-word}
+.panel,.menu-card,.day-card,.transaction-album,.wish-card,.bill-row,.cal-day,.upload-row,.site-tab,.activity-row,.stat-card,.form-panel,.upload-panel,.goal-panel,.cat-corner,.rocket-import,.capture-bar,.review-toggle,.api-callout,.privacy-note{border-radius:4px}
+.button,.button.primary,.button.magic{border-radius:2px}
+.panel-head h2,.browser-heading h2,.rocket-copy h2,.recipe-card h2,.wish-body h2,.wish-preview h2,.menu-card h2{font:600 20px/1.25 'Fraunces',serif}
+h1,h2,h3{overflow-wrap:break-word;word-break:break-word}
+@media(max-width:720px){.food-tabs button{padding:11px 13px;font-size:13px}.cal-nav{gap:10px}}
