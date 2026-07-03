@@ -3,7 +3,7 @@
 @inject BillCalendarService BillCal
 
 <PageTitle>Calendar</PageTitle>
-<section class="page-heading"><div><span class="kicker">EVERYTHING DUE, AT A GLANCE</span><h1>@CurrentMonth.ToString("MMMM yyyy")</h1><p>Bills, autopays, and transfers laid out across the month so nothing sneaks up on us.</p></div></section>
+<section class="page-heading"><div><span class="kicker">EVERYTHING DUE, AT A GLANCE</span><h1>@CurrentMonth.ToString("MMMM yyyy")</h1><p>Bills, autopays, and transfers laid out across the month so nothing sneaks up on us. Tap a day to see and act on everything due.</p></div></section>
 
 <div class="cal-nav">
     <button class="button magic" @onclick="PrevMonth">← Previous</button>
@@ -15,8 +15,14 @@
     <span class="cal-legend-item"><i class="debt"></i> Debt Payment</span>
     <span class="cal-legend-item"><i class="fixed"></i> Fixed Bill</span>
     <span class="cal-legend-item"><i class="transfer"></i> Transfer / Savings</span>
+    <span class="cal-legend-item"><i class="income-dot"></i> Income expected</span>
     <span class="cal-legend-item"><i class="paid-dot"></i> Paid this cycle</span>
 </div>
+
+@if (!string.IsNullOrWhiteSpace(StatusMessage))
+{
+    <div class="success-toast">✓ @StatusMessage</div>
+}
 
 <div class="month-calendar">
     @foreach (var label in new[] { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" })
@@ -31,21 +37,81 @@
         {
             var day = cell.Day.Value;
             var isToday = day == DateTime.Today;
-            var dayBills = BillCal.BillsOnDay(CurrentMonth.Year, CurrentMonth.Month, day.Day).ToList();
-            <div class="cal-day @(isToday ? "today" : "")">
+            var dayBills = MonthItems.Where(x => x.Date.Day == day.Day).ToList();
+            var dayIncome = MonthIncome.Where(x => x.ExpectedDate.Day == day.Day).ToList();
+            <div class="cal-day clickable @(isToday ? "today" : "") @(SelectedDay == day ? "selected" : "")" @onclick="() => SelectDay(day)">
                 <span class="cal-day-num">@day.Day</span>
-                @foreach (var item in dayBills.Take(3))
+                @foreach (var income in dayIncome.Take(1))
+                {
+                    <span class="cal-pill income" title="@income.Source">+@income.NetAmount.ToString("C0") @income.Source</span>
+                }
+                @foreach (var item in dayBills.Take(dayIncome.Any() ? 2 : 3))
                 {
                     <span class="cal-pill @item.Bill.Category.CssClass() @item.Status.CssClass()" title="@item.Bill.Name">@item.Bill.Name@(item.Bill.Amount > 0 ? $" · {item.Bill.Amount:C0}" : "")</span>
                 }
-                @if (dayBills.Count > 3)
+                @{ var shown = dayIncome.Any() ? 2 : 3; }
+                @if (dayBills.Count > shown)
                 {
-                    <span class="cal-pill-more" title="@string.Join(", ", dayBills.Skip(3).Select(x => x.Bill.Name))">+@(dayBills.Count - 3)</span>
+                    <span class="cal-pill-more" title="@string.Join(", ", dayBills.Skip(shown).Select(x => x.Bill.Name))">+@(dayBills.Count - shown)</span>
                 }
             </div>
         }
     }
 </div>
+
+@if (SelectedDay is { } selected)
+{
+    var selectedBills = MonthItems.Where(x => x.Date.Date == selected.Date).ToList();
+    var selectedIncome = MonthIncome.Where(x => x.ExpectedDate.Date == selected.Date).ToList();
+    <section class="panel" style="margin-top:24px" id="day-panel">
+        <div class="panel-head">
+            <div><span class="kicker">@selected.ToString("dddd").ToUpperInvariant()</span><h2>@selected.ToString("MMMM d")</h2></div>
+            <span class="row-actions">
+                <button class="button magic small" @onclick="() => ShowQuickAdd = !ShowQuickAdd">＋ Add a bill this day</button>
+                <button class="icon-button" title="Close" @onclick="() => SelectedDay = null">×</button>
+            </span>
+        </div>
+
+        @if (ShowQuickAdd)
+        {
+            <div class="form-grid">
+                <label>Bill name<input @bind="QuickDraft.Name" placeholder="What's due?" /></label>
+                <label>Amount<input type="number" step=".01" @bind="QuickDraft.Amount" /></label>
+                <label>Type<select @bind="QuickDraft.Category">
+                    <option value="@BillCategory.FixedBill">Regular bill</option>
+                    <option value="@BillCategory.DebtPayment">Debt payment</option>
+                    <option value="@BillCategory.TransferSavings">Transfer / savings</option>
+                </select></label>
+                <label>Whose bill<select @bind="QuickDraft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
+            </div>
+            <div class="form-actions">
+                <button class="button primary small" disabled="@(string.IsNullOrWhiteSpace(QuickDraft.Name))" @onclick="SaveQuickAdd">Save — due day @selected.Day</button>
+                <button class="text-button" @onclick="() => ShowQuickAdd = false">Cancel</button>
+            </div>
+        }
+
+        @foreach (var income in selectedIncome)
+        {
+            <div class="bill-row">
+                <span class="bill-dot fixed"></span>
+                <div class="bill-info"><strong>@income.Source</strong><small>@income.Owner · income expected · @income.Status</small></div>
+                <b>+@income.NetAmount.ToString("C")</b>
+            </div>
+        }
+
+        @if (!selectedBills.Any() && !selectedIncome.Any())
+        {
+            <p class="muted">Nothing due this day.</p>
+        }
+        else
+        {
+            <div class="bill-list">
+                @foreach (var item in selectedBills)
+                { <BillRowView Bill="item.Bill" Notify="ShowToast" OnEdit='_ => Nav.NavigateTo("/bills")' /> }
+            </div>
+        }
+    </section>
+}
 
 <section class="panel" style="margin-top:24px">
     <div class="panel-head"><div><span class="kicker">THIS MONTH</span><h2>Calendar totals</h2></div><b>@BillCal.MonthTotal(CurrentMonth.Year, CurrentMonth.Month).ToString("C")<small> due in @CurrentMonth.ToString("MMMM")</small></b></div>
@@ -63,11 +129,40 @@
 
 @code {
     DateTime CurrentMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
-    record Cell(DateTime? Day);
+    DateTime? SelectedDay;
+    bool ShowQuickAdd;
+    Bill QuickDraft = new();
+    string StatusMessage = "";
 
-    void PrevMonth() => CurrentMonth = CurrentMonth.AddMonths(-1);
-    void NextMonth() => CurrentMonth = CurrentMonth.AddMonths(1);
-    void GoToday() => CurrentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+    [Inject] NavigationManager Nav { get; set; } = default!;
+
+    List<BillCalendarItem> MonthItems => BillCal.BuildMonth(CurrentMonth.Year, CurrentMonth.Month);
+    List<IncomeEvent> MonthIncome => Store.Data.IncomeEvents
+        .Where(x => x.ExpectedDate.Year == CurrentMonth.Year && x.ExpectedDate.Month == CurrentMonth.Month).ToList();
+
+    void PrevMonth() { CurrentMonth = CurrentMonth.AddMonths(-1); SelectedDay = null; }
+    void NextMonth() { CurrentMonth = CurrentMonth.AddMonths(1); SelectedDay = null; }
+    void GoToday() { CurrentMonth = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1); SelectedDay = DateTime.Today; }
+
+    void SelectDay(DateTime day)
+    {
+        SelectedDay = SelectedDay == day ? null : day;
+        ShowQuickAdd = false;
+    }
+
+    void ShowToast(Toast toast) => StatusMessage = toast.Message;
+
+    async Task SaveQuickAdd()
+    {
+        QuickDraft.DueDay = SelectedDay?.Day ?? 1;
+        Store.Data.Bills.Add(QuickDraft);
+        await Store.SaveAsync();
+        StatusMessage = $"Added \"{QuickDraft.Name}\" due day {QuickDraft.DueDay}.";
+        QuickDraft = new();
+        ShowQuickAdd = false;
+    }
+
+    record Cell(DateTime? Day);
 
     IEnumerable<Cell> BuildCells()
     {

@@ -113,6 +113,11 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .badge.status-skipped{background:var(--line);color:var(--muted);text-decoration:line-through}
 .badge.status-overdue{background:rgba(255,90,90,.22);color:#ff8a8a}
 .cal-pill.status-overdue{outline:1px solid #ff8a8a}
+.cal-day.clickable{cursor:pointer;transition:border-color .15s ease}
+.cal-day.clickable:hover{border-color:var(--organic)}
+.cal-day.selected{border-color:var(--organic);box-shadow:0 0 0 1px var(--organic)}
+.cal-pill.income{background:rgba(99,196,164,.3);color:var(--ink)}
+.cal-legend-item i.income-dot{background:rgba(99,196,164,.9)}
 
 .funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
 
