@@ -13,9 +13,6 @@ public class CashflowSummary
     public decimal UpcomingBillsBeforeSelectedDate { get; set; }
     public decimal RequiredDebtPaymentsBeforeSelectedDate { get; set; }
     public decimal ExpectedIncomeBeforeSelectedDate { get; set; }
-    public decimal AvailableBeforeIncome { get; set; }
-    public decimal AvailableAfterIncome { get; set; }
-    public decimal AmountLeftAfterBills { get; set; }
     public decimal BufferAmount { get; set; }
     public decimal AmountLeftAfterBuffer { get; set; }
     public IncomeEvent? NextPaycheck { get; set; }
@@ -62,6 +59,21 @@ public class CashflowService(HouseholdStore store)
             return dueThisMonth >= today ? dueThisMonth : dueThisMonth.AddMonths(1);
         }
 
+        // A biweekly bill hits twice in a month and a yearly one hits once a year — count
+        // every occurrence from the next due date through the end of the window instead of
+        // pretending everything is monthly.
+        decimal AmountDueBy(Bill bill, DateTime end)
+        {
+            var next = NextDueDate(bill);
+            if (next > end) return 0m;
+            var stepDays = bill.Frequency switch { BillFrequency.Weekly => 7, BillFrequency.Biweekly => 14, _ => 0 };
+            if (stepDays > 0) return bill.Amount * (1 + (int)((end - next).TotalDays / stepDays));
+            var stepMonths = bill.Frequency switch { BillFrequency.Quarterly => 3, BillFrequency.Yearly => 12, _ => 1 };
+            var occurrences = 0;
+            for (var due = next; due <= end; due = due.AddMonths(stepMonths)) occurrences++;
+            return bill.Amount * occurrences;
+        }
+
         bool IsBlockedByIncome(Bill bill)
         {
             if (bill.ManualStatus != BillStatus.Delayed) return false;
@@ -86,8 +98,8 @@ public class CashflowService(HouseholdStore store)
             .ToHashSet();
         var dueBeforeSelected = unpaid.Where(x => !excludedIds.Contains(x.Id) && NextDueDate(x) <= selectedDate).ToList();
 
-        var upcomingBeforeSelected = dueBeforeSelected.Where(x => x.Category != BillCategory.DebtPayment).Sum(x => x.Amount);
-        var requiredDebtBeforeSelected = dueBeforeSelected.Where(x => x.Category == BillCategory.DebtPayment).Sum(x => x.Amount);
+        var upcomingBeforeSelected = dueBeforeSelected.Where(x => x.Category != BillCategory.DebtPayment).Sum(x => AmountDueBy(x, selectedDate));
+        var requiredDebtBeforeSelected = dueBeforeSelected.Where(x => x.Category == BillCategory.DebtPayment).Sum(x => AmountDueBy(x, selectedDate));
         var pendingTotal = pending.Sum(x => x.Amount);
         var reservedTotal = reserved.Sum(x => x.Amount);
 
@@ -112,14 +124,11 @@ public class CashflowService(HouseholdStore store)
             UpcomingBillsBeforeSelectedDate = upcomingBeforeSelected,
             RequiredDebtPaymentsBeforeSelectedDate = requiredDebtBeforeSelected,
             ExpectedIncomeBeforeSelectedDate = expectedIncome,
-            AvailableBeforeIncome = availableBeforeIncome,
-            AvailableAfterIncome = availableAfterIncome,
-            AmountLeftAfterBills = availableAfterIncome,
             BufferAmount = data.Funds.Buffer,
             AmountLeftAfterBuffer = amountLeftAfterBuffer,
             NextPaycheck = nextPaycheck,
-            BillsDueThisWeek = unpaid.Where(x => NextDueDate(x) <= weekEnd).Sum(x => x.Amount),
-            BillsDueThisMonth = unpaid.Where(x => NextDueDate(x) <= monthEnd).Sum(x => x.Amount),
+            BillsDueThisWeek = unpaid.Sum(x => AmountDueBy(x, weekEnd)),
+            BillsDueThisMonth = unpaid.Sum(x => AmountDueBy(x, monthEnd)),
             UnpaidBills = unpaid,
             PaidBills = paid,
             PendingBills = pending,

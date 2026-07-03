@@ -54,8 +54,8 @@
         </div>
     </section>
 
-    <section class="panel">
-        <div class="panel-head"><div><span class="kicker">OVERVIEW</span><h2>Looking at</h2></div></div>
+    <section class="panel money-math">
+        <div class="panel-head"><div><span class="kicker">THE MATH</span><h2>Where that number comes from</h2></div></div>
         <div class="food-tabs">
             <button class="@(SelectedWindow == CashflowWindow.UntilNextPaycheck ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.UntilNextPaycheck">Until next paycheck</button>
             <button class="@(SelectedWindow == CashflowWindow.ThisMonth ? "active" : "")" @onclick="() => SelectedWindow = CashflowWindow.ThisMonth">This month</button>
@@ -66,19 +66,14 @@
         {
             <label>Through<input type="date" @bind="CustomDate" /></label>
         }
-        <small class="muted">Looking through @Summary.SelectedDate.ToString("MMM d, yyyy").</small>
-    </section>
-
-    <section class="stat-grid compact">
-        <div class="stat-card sage"><span>Total available funds</span><strong>@Summary.CurrentFunds.ToString("C")</strong></div>
-        <div class="stat-card butter"><span>Pending payments</span><strong>@Summary.PendingPayments.ToString("C")</strong></div>
-        <div class="stat-card lilac"><span>Reserved money</span><strong>@Summary.ReservedMoney.ToString("C")</strong></div>
-        <div class="stat-card peach"><span>Upcoming bills due</span><strong>@Summary.UpcomingBillsBeforeSelectedDate.ToString("C")</strong></div>
-        <div class="stat-card peach"><span>Debt payments due</span><strong>@Summary.RequiredDebtPaymentsBeforeSelectedDate.ToString("C")</strong></div>
-        <div class="stat-card lilac"><span>Expected income</span><strong>@Summary.ExpectedIncomeBeforeSelectedDate.ToString("C")</strong></div>
-        <div class="stat-card butter"><span>Available before next income</span><strong>@Summary.AvailableBeforeIncome.ToString("C")</strong></div>
-        <div class="stat-card sage"><span>Amount left after bills</span><strong>@Summary.AmountLeftAfterBills.ToString("C")</strong></div>
-        <div class="stat-card sage"><span>Amount left after buffer</span><strong>@Summary.AmountLeftAfterBuffer.ToString("C")</strong></div>
+        <div class="math-rows">
+            <div class="math-row"><span>Money we have now</span><b>@Summary.CurrentFunds.ToString("C")</b></div>
+            <div class="math-row"><span>Already spoken for<small>payments processing + money set aside</small></span><b>− @((Summary.PendingPayments + Summary.ReservedMoney).ToString("C"))</b></div>
+            <div class="math-row"><span>Bills due by @Summary.SelectedDate.ToString("MMM d")<small>including debt payments</small></span><b>− @((Summary.UpcomingBillsBeforeSelectedDate + Summary.RequiredDebtPaymentsBeforeSelectedDate).ToString("C"))</b></div>
+            <div class="math-row"><span>Income expected by then</span><b>+ @Summary.ExpectedIncomeBeforeSelectedDate.ToString("C")</b></div>
+            <div class="math-row"><span>Buffer we keep aside</span><b>− @Summary.BufferAmount.ToString("C")</b></div>
+            <div class="math-row total"><span>Safe to spend</span><b>@Summary.AmountLeftAfterBuffer.ToString("C")</b></div>
+        </div>
     </section>
 
     <section class="panel">
@@ -150,59 +145,28 @@ else if (Tab == "Bills")
     {
         <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
             <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
-            <label>Category<select @bind="Draft.Category">
-                <option value="@BillCategory.DebtPayment">Debt Payment</option>
-                <option value="@BillCategory.FixedBill">Fixed Bill</option>
-                <option value="@BillCategory.TransferSavings">Transfer / Savings</option>
-            </select></label>
-            <label>Amount per cycle<input type="number" step=".01" @bind="Draft.Amount" /></label>
-            <label>Original loan amount (optional)<input type="number" step=".01" @bind="Draft.OriginalLoanAmount" placeholder="Leave 0 if not a loan" /></label>
-            <label>Due day<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
-            <label>Frequency<select @bind="Draft.Frequency">
+            <label>Amount<input type="number" step=".01" @bind="Draft.Amount" /></label>
+            <label>Due day of the month<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+            <label>How often<select @bind="Draft.Frequency">
                 <option value="@BillFrequency.Monthly">Monthly</option>
                 <option value="@BillFrequency.Weekly">Weekly</option>
-                <option value="@BillFrequency.Biweekly">Biweekly</option>
-                <option value="@BillFrequency.Quarterly">Quarterly</option>
+                <option value="@BillFrequency.Biweekly">Every 2 weeks</option>
+                <option value="@BillFrequency.Quarterly">Every 3 months</option>
                 <option value="@BillFrequency.Yearly">Yearly</option>
             </select></label>
-            <label>Priority<select @bind="Draft.Priority">
-                <option value="@BillPriority.Critical">Critical</option>
-                <option value="@BillPriority.Debt">Debt</option>
-                <option value="@BillPriority.Subscription">Subscription</option>
-                <option value="@BillPriority.Optional">Optional</option>
+            <label>Type<select @bind="Draft.Category">
+                <option value="@BillCategory.FixedBill">Regular bill</option>
+                <option value="@BillCategory.DebtPayment">Debt payment</option>
+                <option value="@BillCategory.TransferSavings">Transfer / savings</option>
             </select></label>
-            <label>Money type<select @bind="Draft.MoneyType">
-                <option value="@MoneyType.Cash">Cash</option>
-                <option value="@MoneyType.Income">Income</option>
-                <option value="@MoneyType.Expense">Expense</option>
-                <option value="@MoneyType.Transfer">Transfer</option>
-                <option value="@MoneyType.RentReserve">Rent Reserve</option>
-                <option value="@MoneyType.DebtPayment">Debt Payment</option>
-                <option value="@MoneyType.SavingsMove">Savings Move</option>
-            </select></label>
-            <label>Status<select @bind="Draft.ManualStatus">
-                <option value="@BillStatus.Upcoming">Upcoming</option>
-                <option value="@BillStatus.Pending">Pending</option>
-                <option value="@BillStatus.Reserved">Reserved</option>
-                <option value="@BillStatus.Delayed">Delayed</option>
-                <option value="@BillStatus.Skipped">Skipped</option>
-            </select></label>
-            @if (Draft.ManualStatus == BillStatus.Delayed)
-            {
-                <label>Waiting on income<select @onchange="e => Draft.LinkedIncomeEventId = Guid.TryParse(e.Value?.ToString(), out var gid) ? gid : null">
-                    <option value="">— choose —</option>
-                    @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
-                    { <option value="@income.Id" selected="@(Draft.LinkedIncomeEventId == income.Id)">@income.Source</option> }
-                </select></label>
-            }
-            <label>Owner<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
+            <label>Whose bill<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
             <label>Notes<input @bind="Draft.Notes" placeholder="Optional" /></label>
-            <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Autopay</label>
+            <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Pays itself (autopay)</label>
         </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
     }
 
     <section class="panel">
-        <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / cycle</small></b></div>
+        <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / month</small></b></div>
         @foreach (var group in Groups)
         {
             <div class="bill-group">
@@ -446,7 +410,7 @@ else
         <span class="bill-dot @bill.Category.CssClass()"></span>
         <div class="bill-info">
             <strong>@bill.Name</strong>
-            <small>Due day @bill.DueDay @(bill.AutoPay ? "· Autopay" : "") · @bill.Owner @(bill.OriginalLoanAmount > 0 ? $" · {bill.Amount / bill.OriginalLoanAmount * 100:N0}% of {bill.OriginalLoanAmount:C0}" : "")</small>
+            <small>Due day @bill.DueDay@(bill.Frequency == BillFrequency.Monthly ? "" : $" · {bill.Frequency.Label()}")@(bill.AutoPay ? " · autopay" : "") · @bill.Owner</small>
             @if (bill.ManualStatus == BillStatus.Delayed)
             {
                 var linked = bill.LinkedIncomeEventId is { } incId ? Store.Data.IncomeEvents.FirstOrDefault(x => x.Id == incId) : null;
@@ -455,32 +419,32 @@ else
             @if (!string.IsNullOrWhiteSpace(bill.Notes))
             { <small class="muted">@bill.Notes</small> }
         </div>
-        <span class="badge @bill.Priority.CssClass()">@bill.Priority.Label()</span>
         <span class="badge @bill.EffectiveStatus(DateTime.Today).CssClass()">@bill.EffectiveStatus(DateTime.Today).Label()</span>
         <b>@bill.Amount.ToString("C")</b>
         <span class="row-actions">
-            <select @onchange="e => SetStatus(bill, e.Value)">
-                <option value="">Set status…</option>
-                <option value="@BillStatus.Upcoming">Upcoming</option>
-                <option value="@BillStatus.Pending">Pending</option>
-                <option value="@BillStatus.Reserved">Reserved</option>
-                <option value="@BillStatus.Delayed">Delayed</option>
-                <option value="@BillStatus.Skipped">Skipped</option>
-            </select>
-            @if (bill.ManualStatus == BillStatus.Delayed)
-            {
-                <select @onchange="e => LinkIncome(bill, e.Value)">
-                    <option value="">Waiting on…</option>
-                    @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
-                    { <option value="@income.Id" selected="@(bill.LinkedIncomeEventId == income.Id)">@income.Source</option> }
-                </select>
-            }
-            <button class="icon-button" title="Edit" @onclick="() => Edit(bill)">✎</button>
-            <button class="icon-button" title="Remove" @onclick="() => Delete(bill)">×</button>
             @if (bill.EffectiveStatus(DateTime.Today) == BillStatus.Paid)
             { <button class="button magic small" @onclick="() => UnmarkPaid(bill)">Paid — undo</button> }
             else
-            { <button class="button primary small" disabled="@(bill.Amount <= 0)" @onclick="() => MarkPaid(bill)">Mark paid</button> }
+            {
+                <select value="@bill.ManualStatus" @onchange="e => SetStatus(bill, e.Value)">
+                    <option value="@BillStatus.Upcoming">Upcoming</option>
+                    <option value="@BillStatus.Pending">Processing</option>
+                    <option value="@BillStatus.Reserved">Set aside</option>
+                    <option value="@BillStatus.Delayed">Waiting on income</option>
+                    <option value="@BillStatus.Skipped">Skipped</option>
+                </select>
+                @if (bill.ManualStatus == BillStatus.Delayed)
+                {
+                    <select @onchange="e => LinkIncome(bill, e.Value)">
+                        <option value="">Waiting on…</option>
+                        @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
+                        { <option value="@income.Id" selected="@(bill.LinkedIncomeEventId == income.Id)">@income.Source</option> }
+                    </select>
+                }
+                <button class="button primary small" disabled="@(bill.Amount <= 0)" @onclick="() => MarkPaid(bill)">Mark paid</button>
+            }
+            <button class="icon-button" title="Edit" @onclick="() => Edit(bill)">✎</button>
+            <button class="icon-button" title="Remove" @onclick="() => Delete(bill)">×</button>
         </span>
     </div>;
 
@@ -526,9 +490,9 @@ else
 
     record BillGroup(BillCategory Category, List<Bill> Bills, decimal Total);
     IEnumerable<BillGroup> Groups => Enum.GetValues<BillCategory>()
-        .Select(c => new BillGroup(c, Store.Data.Bills.Where(x => x.IsActive && x.Category == c).OrderBy(x => x.DueDay).ToList(), Store.Data.Bills.Where(x => x.IsActive && x.Category == c).Sum(x => x.Amount)));
+        .Select(c => new BillGroup(c, Store.Data.Bills.Where(x => x.IsActive && x.Category == c).OrderBy(x => x.DueDay).ToList(), Store.Data.Bills.Where(x => x.IsActive && x.Category == c).Sum(x => x.MonthlyEquivalent)));
 
-    decimal TotalMonthly => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
+    decimal TotalMonthly => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.MonthlyEquivalent);
 
     async Task SaveFunds()
     {
@@ -547,10 +511,9 @@ else
         EditingId = bill.Id;
         Draft = new()
         {
-            Id = bill.Id, Name = bill.Name, Category = bill.Category, Amount = bill.Amount, OriginalLoanAmount = bill.OriginalLoanAmount,
+            Id = bill.Id, Name = bill.Name, Category = bill.Category, Amount = bill.Amount,
             DueDay = bill.DueDay, AutoPay = bill.AutoPay, IsActive = bill.IsActive, LastPaidDate = bill.LastPaidDate,
-            Frequency = bill.Frequency, Priority = bill.Priority, Owner = bill.Owner, Notes = bill.Notes, ManualStatus = bill.ManualStatus,
-            MoneyType = bill.MoneyType, LinkedIncomeEventId = bill.LinkedIncomeEventId
+            Frequency = bill.Frequency, Owner = bill.Owner, Notes = bill.Notes
         };
         ShowForm = true;
     }
@@ -562,18 +525,15 @@ else
             if (existing is not null)
             {
                 existing.Name = Draft.Name; existing.Category = Draft.Category; existing.Amount = Draft.Amount;
-                existing.OriginalLoanAmount = Draft.OriginalLoanAmount; existing.DueDay = Draft.DueDay; existing.AutoPay = Draft.AutoPay;
-                existing.Frequency = Draft.Frequency; existing.Priority = Draft.Priority; existing.Owner = Draft.Owner; existing.Notes = Draft.Notes;
-                existing.MoneyType = Draft.MoneyType; existing.ManualStatus = Draft.ManualStatus;
-                existing.LinkedIncomeEventId = Draft.ManualStatus == BillStatus.Delayed ? Draft.LinkedIncomeEventId : null;
+                existing.DueDay = Draft.DueDay; existing.AutoPay = Draft.AutoPay;
+                existing.Frequency = Draft.Frequency; existing.Owner = Draft.Owner; existing.Notes = Draft.Notes;
             }
             StatusMessage = $"Updated \"{Draft.Name}\".";
         }
         else
         {
-            if (Draft.ManualStatus != BillStatus.Delayed) Draft.LinkedIncomeEventId = null;
             Store.Data.Bills.Add(Draft);
-            StatusMessage = $"Added \"{Draft.Name}\" — {Draft.Amount:C}/cycle.";
+            StatusMessage = $"Added \"{Draft.Name}\" — {Draft.Amount:C} {Draft.Frequency.Label()}.";
         }
         await Store.SaveAsync();
         CloseForm();

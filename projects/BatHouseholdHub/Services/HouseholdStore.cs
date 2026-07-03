@@ -322,44 +322,37 @@ public class HouseholdStore
     /// recurring patterns; bills with no clear fixed amount are left at 0 with a note instead
     /// of a guess. Reconciled by name on every startup so renaming/adding here updates existing
     /// installs without wiping amounts the household has already entered themselves.</summary>
-    private static readonly (string Name, BillCategory Category, decimal Amount, int DueDay, BillFrequency Frequency, BillPriority Priority, string Notes)[] KnownBills =
+    private static readonly (string Name, BillCategory Category, decimal Amount, int DueDay, BillFrequency Frequency, string Notes)[] KnownBills =
     [
-        ("Chase card manual payment", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Manual extra payments vary in amount — update each cycle."),
-        ("Chase autopay", BillCategory.DebtPayment, 163m, 23, BillFrequency.Monthly, BillPriority.Debt, ""),
-        ("Affirm", BillCategory.DebtPayment, 161.44m, 22, BillFrequency.Monthly, BillPriority.Debt, "Combined total of simultaneous installment plans."),
-        ("Klover", BillCategory.DebtPayment, 4.99m, 22, BillFrequency.Monthly, BillPriority.Debt, "Membership fee only — cash advance repayments are separate and vary."),
-        ("Dave", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Highly variable ($25–$179) with no fixed cadence — confirm amount."),
-        ("Brigit", BillCategory.DebtPayment, 8.99m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Ally car", BillCategory.DebtPayment, 439.44m, 28, BillFrequency.Monthly, BillPriority.Debt, ""),
-        ("SNAP Finance", BillCategory.DebtPayment, 21.50m, 15, BillFrequency.Biweekly, BillPriority.Debt, ""),
-        ("Upgrade", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "No matching transactions found — confirm amount and due day."),
-        ("Progressive", BillCategory.FixedBill, 169.66m, 22, BillFrequency.Monthly, BillPriority.Critical, ""),
-        ("Verizon", BillCategory.FixedBill, 64.55m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Rocket Money", BillCategory.FixedBill, 10.66m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("IdentityIQ", BillCategory.FixedBill, 30.74m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Experian", BillCategory.FixedBill, 27.05m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Uber One", BillCategory.FixedBill, 9.99m, 28, BillFrequency.Monthly, BillPriority.Optional, ""),
-        ("HBO Max", BillCategory.FixedBill, 5.30m, 22, BillFrequency.Monthly, BillPriority.Optional, "Amount unverified from import — confirm against latest statement."),
-        ("Claude", BillCategory.FixedBill, 21.32m, 27, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Amazon Prime", BillCategory.FixedBill, 16.23m, 22, BillFrequency.Monthly, BillPriority.Subscription, "Prime Video Channels adds another ~$14.06 on a separate charge."),
-        ("City of Davenport", BillCategory.FixedBill, 40m, 3, BillFrequency.Monthly, BillPriority.Critical, ""),
-        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Rent money moved aside ahead of the due date — treated as reserved, not spendable."),
-        ("Apple Cash transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
-        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
-        ("Ahmad", BillCategory.FixedBill, 600m, 1, BillFrequency.Monthly, BillPriority.Critical, "Rent owed to Ahmad — delayed until the Vista final check arrives.")
+        ("Chase card manual payment", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, "Manual extra payments vary in amount — update each cycle."),
+        ("Chase autopay", BillCategory.DebtPayment, 163m, 23, BillFrequency.Monthly, ""),
+        ("Affirm", BillCategory.DebtPayment, 161.44m, 22, BillFrequency.Monthly, "Combined total of simultaneous installment plans."),
+        ("Klover", BillCategory.DebtPayment, 4.99m, 22, BillFrequency.Monthly, "Membership fee only — cash advance repayments are separate and vary."),
+        ("Dave", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, "Highly variable ($25–$179) with no fixed cadence — confirm amount."),
+        ("Brigit", BillCategory.DebtPayment, 8.99m, 22, BillFrequency.Monthly, ""),
+        ("Ally car", BillCategory.DebtPayment, 439.44m, 28, BillFrequency.Monthly, ""),
+        ("SNAP Finance", BillCategory.DebtPayment, 21.50m, 15, BillFrequency.Biweekly, ""),
+        ("Upgrade", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, "No matching transactions found — confirm amount and due day."),
+        ("Progressive", BillCategory.FixedBill, 169.66m, 22, BillFrequency.Monthly, ""),
+        ("Verizon", BillCategory.FixedBill, 64.55m, 10, BillFrequency.Monthly, ""),
+        ("Rocket Money", BillCategory.FixedBill, 10.66m, 22, BillFrequency.Monthly, ""),
+        ("IdentityIQ", BillCategory.FixedBill, 30.74m, 10, BillFrequency.Monthly, ""),
+        ("Experian", BillCategory.FixedBill, 27.05m, 10, BillFrequency.Monthly, ""),
+        ("Uber One", BillCategory.FixedBill, 9.99m, 28, BillFrequency.Monthly, ""),
+        ("HBO Max", BillCategory.FixedBill, 5.30m, 22, BillFrequency.Monthly, "Amount unverified from import — confirm against latest statement."),
+        ("Claude", BillCategory.FixedBill, 21.32m, 27, BillFrequency.Monthly, ""),
+        ("Amazon Prime", BillCategory.FixedBill, 16.23m, 22, BillFrequency.Monthly, "Prime Video Channels adds another ~$14.06 on a separate charge."),
+        ("City of Davenport", BillCategory.FixedBill, 40m, 3, BillFrequency.Monthly, ""),
+        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, "Rent money moved aside ahead of the due date — treated as reserved, not spendable."),
+        ("Apple Cash transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, "Highly variable transfers, not a fixed bill."),
+        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, "Highly variable transfers, not a fixed bill."),
+        ("Ahmad", BillCategory.FixedBill, 600m, 1, BillFrequency.Monthly, "Rent owed to Ahmad — delayed until the Vista final check arrives.")
     ];
-
-    private static MoneyType DefaultMoneyType(BillCategory category) => category switch
-    {
-        BillCategory.DebtPayment => MoneyType.DebtPayment,
-        BillCategory.TransferSavings => MoneyType.Transfer,
-        _ => MoneyType.Expense
-    };
 
     private bool EnsureKnownBills()
     {
         var changed = false;
-        foreach (var (name, category, amount, dueDay, frequency, priority, notes) in KnownBills)
+        foreach (var (name, category, amount, dueDay, frequency, notes) in KnownBills)
         {
             var existing = Data.Bills.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existing is null)
@@ -367,11 +360,11 @@ public class HouseholdStore
                 var bill = new Bill
                 {
                     Name = name, Category = category, Amount = amount, DueDay = dueDay,
-                    Frequency = frequency, Priority = priority, Notes = notes, MoneyType = DefaultMoneyType(category)
+                    Frequency = frequency, Notes = notes
                 };
                 // The rent transfer is money already set aside, not spendable; Ahmad's rent
                 // waits on income rather than a due date — see the real-life example in the brief.
-                if (name == "SoFi transfer") { bill.ManualStatus = BillStatus.Reserved; bill.MoneyType = MoneyType.RentReserve; }
+                if (name == "SoFi transfer") bill.ManualStatus = BillStatus.Reserved;
                 if (name == "Ahmad") bill.ManualStatus = BillStatus.Delayed;
                 Data.Bills.Add(bill);
                 changed = true;
@@ -382,7 +375,6 @@ public class HouseholdStore
                 existing.Amount = amount;
                 existing.DueDay = dueDay;
                 existing.Frequency = frequency;
-                existing.Priority = priority;
                 if (string.IsNullOrWhiteSpace(existing.Notes)) existing.Notes = notes;
                 changed = true;
             }

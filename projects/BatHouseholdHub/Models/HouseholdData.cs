@@ -129,7 +129,6 @@ public class RecurringTransaction
 
 public enum BillCategory { DebtPayment, FixedBill, TransferSavings }
 public enum BillFrequency { Monthly, Weekly, Biweekly, Quarterly, Yearly }
-public enum BillPriority { Critical, Debt, Subscription, Optional }
 public enum BillStatus { Upcoming, Pending, Paid, Reserved, Delayed, NeedsReview, Skipped }
 public enum MoneyType { Cash, Income, Expense, Transfer, RentReserve, DebtPayment, SavingsMove }
 
@@ -139,20 +138,28 @@ public class Bill
     public string Name { get; set; } = "";
     public BillCategory Category { get; set; } = BillCategory.FixedBill;
     public decimal Amount { get; set; }
-    public decimal OriginalLoanAmount { get; set; }
     public int DueDay { get; set; } = 1;
     public BillFrequency Frequency { get; set; } = BillFrequency.Monthly;
-    public BillPriority Priority { get; set; } = BillPriority.Subscription;
     public string Owner { get; set; } = "Shared";
     public string Notes { get; set; } = "";
     public bool AutoPay { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime? LastPaidDate { get; set; }
     public BillStatus ManualStatus { get; set; } = BillStatus.Upcoming;
-    public MoneyType MoneyType { get; set; } = MoneyType.Expense;
     /// <summary>When ManualStatus is Delayed, the bill waits on this income event instead of
     /// a due date — e.g. "Pay Ahmad $600 after Vista final check arrives."</summary>
     public Guid? LinkedIncomeEventId { get; set; }
+
+    /// <summary>What this bill costs per month regardless of billing cadence, so totals
+    /// don't undercount a biweekly bill or overcount a yearly one.</summary>
+    public decimal MonthlyEquivalent => Frequency switch
+    {
+        BillFrequency.Weekly => Amount * 52m / 12m,
+        BillFrequency.Biweekly => Amount * 26m / 12m,
+        BillFrequency.Quarterly => Amount / 3m,
+        BillFrequency.Yearly => Amount / 12m,
+        _ => Amount
+    };
 
     public bool IsPaidThisCycle(DateTime asOf) => LastPaidDate is { } d && d.Year == asOf.Year && d.Month == asOf.Month;
     public BillStatus EffectiveStatus(DateTime asOf) => IsPaidThisCycle(asOf) ? BillStatus.Paid : ManualStatus;
@@ -279,10 +286,10 @@ public static class BillStatusExtensions
 {
     public static string Label(this BillStatus status) => status switch
     {
-        BillStatus.Pending => "Pending",
+        BillStatus.Pending => "Processing",
         BillStatus.Paid => "Paid",
-        BillStatus.Reserved => "Reserved",
-        BillStatus.Delayed => "Delayed",
+        BillStatus.Reserved => "Set aside",
+        BillStatus.Delayed => "Waiting on income",
         BillStatus.NeedsReview => "Needs review",
         BillStatus.Skipped => "Skipped",
         _ => "Upcoming"
@@ -300,35 +307,14 @@ public static class BillStatusExtensions
     };
 }
 
-public static class MoneyTypeExtensions
+public static class BillFrequencyExtensions
 {
-    public static string Label(this MoneyType type) => type switch
+    public static string Label(this BillFrequency frequency) => frequency switch
     {
-        MoneyType.Cash => "Cash",
-        MoneyType.Income => "Income",
-        MoneyType.Transfer => "Transfer",
-        MoneyType.RentReserve => "Rent Reserve",
-        MoneyType.DebtPayment => "Debt Payment",
-        MoneyType.SavingsMove => "Savings Move",
-        _ => "Expense"
-    };
-}
-
-public static class BillPriorityExtensions
-{
-    public static string Label(this BillPriority priority) => priority switch
-    {
-        BillPriority.Critical => "Critical",
-        BillPriority.Debt => "Debt",
-        BillPriority.Optional => "Optional",
-        _ => "Subscription"
-    };
-
-    public static string CssClass(this BillPriority priority) => priority switch
-    {
-        BillPriority.Critical => "priority-critical",
-        BillPriority.Debt => "priority-debt",
-        BillPriority.Optional => "priority-optional",
-        _ => "priority-subscription"
+        BillFrequency.Weekly => "weekly",
+        BillFrequency.Biweekly => "every 2 weeks",
+        BillFrequency.Quarterly => "quarterly",
+        BillFrequency.Yearly => "yearly",
+        _ => "monthly"
     };
 }
