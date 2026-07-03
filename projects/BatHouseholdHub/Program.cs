@@ -46,6 +46,7 @@ builder.Services.AddSingleton(new PlaidClient(plaidEnv,
     secret: builder.Configuration["PLAID_SECRET"] ?? "",
     clientId: builder.Configuration["PLAID_CLIENT_ID"] ?? ""));
 builder.Services.AddScoped<PlaidService>();
+builder.Services.AddScoped<PlaidSyncRunner>();
 builder.Services.AddHostedService<PlaidSyncService>();
 builder.Services.AddDataProtection()
     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataFolder, "keys")))

@@ -10,6 +10,8 @@
             var linked = Bill.LinkedIncomeEventId is { } incId ? Store.Data.IncomeEvents.FirstOrDefault(x => x.Id == incId) : null;
             <small class="muted">Waiting on @(linked?.Source ?? "an income event — choose one below")</small>
         }
+        @if (Bill.LastAmountDelta is { } delta && delta != 0 && Bill.AmountUpdatedAt is { } changed && changed > DateTime.Today.AddDays(-45))
+        { <small class="@(delta > 0 ? "trend-up" : "trend-down")">@(delta > 0 ? "▲ went up" : "▼ went down") @Math.Abs(delta).ToString("C") on @changed.ToString("MMM d")</small> }
         @if (!string.IsNullOrWhiteSpace(Bill.Notes))
         { <small class="muted">@Bill.Notes</small> }
     </div>

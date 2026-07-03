@@ -1,6 +1,7 @@
 @page "/banking"
 @inject HouseholdStore Store
 @inject PlaidService Plaid
+@inject PlaidSyncRunner SyncRunner
 @inject ActivePersonService ActivePerson
 @inject IJSRuntime JS
 
@@ -27,7 +28,11 @@ else
     </section>
 
     <section class="panel" style="margin-top:24px">
-        <div class="panel-head"><div><span class="kicker">CONNECTED</span><h2>Linked accounts</h2></div></div>
+        <div class="panel-head">
+            <div><span class="kicker">CONNECTED</span><h2>Linked accounts</h2></div>
+            @if (Store.Data.PlaidItems.Any())
+            { <button class="button magic small" disabled="@IsSyncing" @onclick="SyncNow">@(IsSyncing ? "Syncing…" : "↻ Sync now")</button> }
+        </div>
         <div class="bill-list">
             @if (!Store.Data.PlaidItems.Any())
             {
@@ -45,9 +50,27 @@ else
                         </div>
                         <button class="delete-button" title="Disconnect" @onclick="() => Disconnect(item.Id)">×</button>
                     </div>
+                    @foreach (var account in Store.Data.PlaidAccounts.Where(a => a.ItemId == item.ItemId))
+                    {
+                        <div class="bill-row">
+                            <span class="bill-dot transfer"></span>
+                            <div class="bill-info">
+                                <strong>@account.DisplayName</strong>
+                                <small>@account.Type · updated @account.LastUpdated.ToString("MMM d, h:mm tt")</small>
+                            </div>
+                            <b>@account.SpendableBalance.ToString("C")</b>
+                            <span class="row-actions">
+                                <select value="@account.Owner" @onchange="e => SetAccountOwner(account, e.Value)">
+                                    <option>Shared</option><option>Trey</option><option>Jess</option>
+                                </select>
+                                <label class="check-label"><input type="checkbox" checked="@account.IncludeInFunds" @onchange="e => SetAccountInclude(account, e.Value)" /> Count in funds</label>
+                            </span>
+                        </div>
+                    }
                 }
             }
         </div>
+        <p class="muted">"Count in funds" should stay off for credit cards and loans — their balance is what's owed, not spendable money.</p>
     </section>
 }
 
@@ -77,6 +100,28 @@ else
     }
 
     async Task Disconnect(Guid id) => await Store.RemovePlaidItemAsync(id);
+
+    bool IsSyncing;
+    async Task SyncNow()
+    {
+        IsSyncing = true;
+        try
+        {
+            await SyncRunner.SyncAllAsync();
+            StatusMessage = "Synced. Balances and transactions are up to date.";
+        }
+        catch (Exception ex) { StatusMessage = $"Sync failed: {ex.Message}"; }
+        finally { IsSyncing = false; }
+    }
+
+    async Task SetAccountOwner(PlaidAccount account, object? value)
+    {
+        var owner = value?.ToString();
+        if (!string.IsNullOrWhiteSpace(owner)) await Store.SetPlaidAccountOwnerAsync(account.AccountId, owner);
+    }
+
+    async Task SetAccountInclude(PlaidAccount account, object? value) =>
+        await Store.SetPlaidAccountIncludeAsync(account.AccountId, value is bool b && b);
 
     class PlaidLinkResult
     {

@@ -18,6 +18,7 @@ public class HouseholdData
     public List<PushSubscriptionRecord> PushSubscriptions { get; set; } = [];
     public List<string> NotifiedBillKeys { get; set; } = [];
     public List<PlaidItem> PlaidItems { get; set; } = [];
+    public List<PlaidAccount> PlaidAccounts { get; set; } = [];
     public HouseholdFunds Funds { get; set; } = new();
     public HomeButlerSettings HomeButler { get; set; } = new();
 }
@@ -36,6 +37,26 @@ public class PlaidItem
     public string? SyncCursor { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime? LastSyncedAt { get; set; }
+}
+
+/// <summary>One bank account under a linked Plaid item, refreshed on every sync. Balances
+/// feed the Available Funds math when IncludeInFunds is on (defaulted for checking/savings,
+/// off for credit cards and loans, whose "balance" is debt, not spendable money).</summary>
+public class PlaidAccount
+{
+    public string AccountId { get; set; } = "";
+    public string ItemId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Mask { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Owner { get; set; } = "Shared";
+    public bool IncludeInFunds { get; set; }
+    public decimal? Available { get; set; }
+    public decimal? Current { get; set; }
+    public DateTime LastUpdated { get; set; }
+
+    public decimal SpendableBalance => Available ?? Current ?? 0m;
+    public string DisplayName => string.IsNullOrWhiteSpace(Mask) ? Name : $"{Name} ••{Mask}";
 }
 
 /// <summary>A browser's Web Push subscription (endpoint + encryption keys), captured once
@@ -151,6 +172,10 @@ public class Bill
     /// <summary>When ManualStatus is Delayed, the bill waits on this income event instead of
     /// a due date — e.g. "Pay Ahmad $600 after Vista final check arrives."</summary>
     public Guid? LinkedIncomeEventId { get; set; }
+    /// <summary>Set when a matched bank transaction updates Amount to what was actually
+    /// charged: how much it moved (new − old) and when, so the UI can flag price changes.</summary>
+    public decimal? LastAmountDelta { get; set; }
+    public DateTime? AmountUpdatedAt { get; set; }
 
     /// <summary>What this bill costs per month regardless of billing cadence, so totals
     /// don't undercount a biweekly bill or overcount a yearly one.</summary>

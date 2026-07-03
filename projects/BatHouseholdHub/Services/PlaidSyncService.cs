@@ -1,41 +1,34 @@
 using Going.Plaid;
+using Going.Plaid.Accounts;
 using Going.Plaid.Transactions;
 using BatHouseholdHub.Models;
 
 namespace BatHouseholdHub.Services;
 
-/// <summary>Pulls new bank transactions for every connected Plaid item every 6 hours,
-/// using the incremental /transactions/sync cursor so each run only fetches what's new.
-/// Mirrors the manual CSV import: same Transaction shape, same dedup/reconcile pass.</summary>
-public class PlaidSyncService(IServiceScopeFactory scopeFactory, PlaidClient client, IConfiguration config, ILogger<PlaidSyncService> logger) : BackgroundService
+/// <summary>Does one full Plaid sync pass: live account balances first (they feed the
+/// Available Funds math), then incremental transactions via the /transactions/sync cursor.
+/// Scoped so both the 6-hour background timer and the Banking page's "Sync now" button run
+/// the exact same code.</summary>
+public class PlaidSyncRunner(PlaidClient client, IConfiguration config, HouseholdStore store, ILogger<PlaidSyncRunner> logger)
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
-        do
-        {
-            try { await SyncAllAsync(); }
-            catch (Exception ex) { logger.LogError(ex, "Failed to sync Plaid transactions"); }
-        }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
-    }
+    public bool IsConfigured =>
+        !string.IsNullOrWhiteSpace(config["PLAID_CLIENT_ID"]) && !string.IsNullOrWhiteSpace(config["PLAID_SECRET"]);
 
-    private async Task SyncAllAsync()
+    public async Task SyncAllAsync()
     {
-        if (string.IsNullOrWhiteSpace(config["PLAID_CLIENT_ID"]) || string.IsNullOrWhiteSpace(config["PLAID_SECRET"])) return;
-
-        using var scope = scopeFactory.CreateScope();
-        var store = scope.ServiceProvider.GetRequiredService<HouseholdStore>();
+        if (!IsConfigured) return;
 
         foreach (var item in store.Data.PlaidItems.ToList())
         {
-            try { await SyncItemAsync(store, item); }
+            try { await SyncItemAsync(item); }
             catch (Exception ex) { logger.LogError(ex, "Failed to sync Plaid item {Institution}", item.InstitutionName); }
         }
     }
 
-    private async Task SyncItemAsync(HouseholdStore store, PlaidItem item)
+    private async Task SyncItemAsync(PlaidItem item)
     {
+        var accountNames = await SyncBalancesAsync(item);
+
         string? cursor = item.SyncCursor;
         var parsed = new List<Transaction>();
         bool hasMore;
@@ -55,7 +48,7 @@ public class PlaidSyncService(IServiceScopeFactory scopeFactory, PlaidClient cli
                     Owner = item.Owner,
                     Amount = Math.Abs(amount),
                     IsIncome = amount < 0,
-                    Account = t.AccountId ?? "",
+                    Account = t.AccountId is { } id && accountNames.TryGetValue(id, out var name) ? name : t.AccountId ?? "",
                     Institution = item.InstitutionName,
                     Source = "Plaid",
                     SourceKey = $"plaid:{t.TransactionId}",
@@ -70,5 +63,57 @@ public class PlaidSyncService(IServiceScopeFactory scopeFactory, PlaidClient cli
 
         if (parsed.Count > 0) await store.ImportPlaidTransactionsAsync(parsed);
         await store.SetPlaidSyncCursorAsync(item.Id, cursor);
+    }
+
+    /// <summary>Fetches live balances for the item's accounts, persists them, and returns an
+    /// AccountId → display-name map so transactions carry a readable account name instead of
+    /// Plaid's opaque id string.</summary>
+    private async Task<Dictionary<string, string>> SyncBalancesAsync(PlaidItem item)
+    {
+        var names = new Dictionary<string, string>();
+        var response = await client.AccountsBalanceGetAsync(new AccountsBalanceGetRequest { AccessToken = item.AccessToken });
+        if (response.Error is not null)
+        {
+            logger.LogWarning("Balance fetch failed for {Institution}: {Error}", item.InstitutionName, response.Error.ErrorMessage);
+            return names;
+        }
+
+        var fetched = new List<PlaidAccount>();
+        foreach (var account in response.Accounts)
+        {
+            var record = new PlaidAccount
+            {
+                AccountId = account.AccountId,
+                Name = account.Name,
+                Mask = account.Mask ?? "",
+                Type = account.Type.ToString().ToLowerInvariant(),
+                Available = account.Balances?.Available,
+                Current = account.Balances?.Current,
+                LastUpdated = DateTime.Now
+            };
+            fetched.Add(record);
+            names[record.AccountId] = record.DisplayName;
+        }
+        await store.UpsertPlaidAccountsAsync(item.ItemId, item.Owner, fetched);
+        return names;
+    }
+}
+
+/// <summary>Runs a full Plaid sync at startup and every 6 hours after.</summary>
+public class PlaidSyncService(IServiceScopeFactory scopeFactory, ILogger<PlaidSyncService> logger) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromHours(6));
+        do
+        {
+            try
+            {
+                using var scope = scopeFactory.CreateScope();
+                await scope.ServiceProvider.GetRequiredService<PlaidSyncRunner>().SyncAllAsync();
+            }
+            catch (Exception ex) { logger.LogError(ex, "Failed to sync Plaid data"); }
+        }
+        while (await timer.WaitForNextTickAsync(stoppingToken));
     }
 }

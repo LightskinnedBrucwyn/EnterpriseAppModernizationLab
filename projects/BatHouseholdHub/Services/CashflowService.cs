@@ -85,7 +85,9 @@ public class CashflowService(HouseholdStore store)
             .Where(x => x.Status != IncomeStatus.Received && x.ExpectedDate.Date >= today && x.ExpectedDate.Date <= selectedDate)
             .Sum(x => x.NetAmount);
 
-        var currentFunds = data.Funds.Total;
+        // Live bank balances (when accounts are linked) plus the manual figures, which
+        // cover cash and anything not in a linked account.
+        var currentFunds = data.Funds.Total + store.BankFundsTotal();
         var availableBeforeIncome = currentFunds - pendingTotal - reservedTotal - upcomingBeforeSelected - requiredDebtBeforeSelected;
         var availableAfterIncome = availableBeforeIncome + expectedIncome;
         var amountLeftAfterBuffer = availableAfterIncome - data.Funds.Buffer;

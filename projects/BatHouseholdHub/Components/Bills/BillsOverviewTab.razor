@@ -2,7 +2,21 @@
 @inject CashflowService Cashflow
 
 <section class="panel funds-panel">
-    <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@Store.Data.Funds.Total.ToString("C")</b></div>
+    <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@((Store.Data.Funds.Total + Store.BankFundsTotal()).ToString("C"))</b></div>
+    @if (Store.Data.PlaidAccounts.Any(a => a.IncludeInFunds))
+    {
+        <div class="bill-list" style="margin-bottom:14px">
+            @foreach (var account in Store.Data.PlaidAccounts.Where(a => a.IncludeInFunds).OrderBy(a => a.Owner))
+            {
+                <div class="bill-row">
+                    <span class="bill-dot fixed"></span>
+                    <div class="bill-info"><strong>@account.DisplayName</strong><small>@account.Owner · from the bank · updated @account.LastUpdated.ToString("MMM d, h:mm tt")</small></div>
+                    <b>@account.SpendableBalance.ToString("C")</b>
+                </div>
+            }
+        </div>
+        <p class="muted">Bank balances flow in automatically. The fields below are only for cash or money that isn't in a linked account — don't repeat a bank balance here.</p>
+    }
     <div class="form-grid">
         <label>Trey<input type="number" step=".01" @bind="FundsDraft.Trey" /></label>
         <label>Jess<input type="number" step=".01" @bind="FundsDraft.Jess" /></label>

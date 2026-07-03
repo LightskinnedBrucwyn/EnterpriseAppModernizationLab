@@ -155,9 +155,61 @@ public class HouseholdStore
 
     public async Task RemovePlaidItemAsync(Guid id)
     {
+        var item = Data.PlaidItems.FirstOrDefault(x => x.Id == id);
+        if (item is not null) Data.PlaidAccounts.RemoveAll(a => a.ItemId == item.ItemId);
         Data.PlaidItems.RemoveAll(x => x.Id == id);
         await SaveAsync();
     }
+
+    /// <summary>Refreshes the stored accounts for one Plaid item from a fresh balance fetch.
+    /// Balances and names always update; Owner and IncludeInFunds are household choices and
+    /// are preserved on accounts we've seen before.</summary>
+    public async Task UpsertPlaidAccountsAsync(string itemId, string itemOwner, List<PlaidAccount> fetched)
+    {
+        foreach (var account in fetched)
+        {
+            var existing = Data.PlaidAccounts.FirstOrDefault(x => x.AccountId == account.AccountId);
+            if (existing is null)
+            {
+                account.ItemId = itemId;
+                account.Owner = itemOwner;
+                account.IncludeInFunds = account.Type.Equals("depository", StringComparison.OrdinalIgnoreCase);
+                Data.PlaidAccounts.Add(account);
+            }
+            else
+            {
+                existing.Name = account.Name;
+                existing.Mask = account.Mask;
+                existing.Type = account.Type;
+                existing.Available = account.Available;
+                existing.Current = account.Current;
+                existing.LastUpdated = account.LastUpdated;
+            }
+        }
+        await SaveAsync();
+    }
+
+    public async Task SetPlaidAccountOwnerAsync(string accountId, string owner)
+    {
+        var account = Data.PlaidAccounts.FirstOrDefault(x => x.AccountId == accountId);
+        if (account is null) return;
+        account.Owner = owner;
+        await SaveAsync();
+    }
+
+    public async Task SetPlaidAccountIncludeAsync(string accountId, bool include)
+    {
+        var account = Data.PlaidAccounts.FirstOrDefault(x => x.AccountId == accountId);
+        if (account is null) return;
+        account.IncludeInFunds = include;
+        await SaveAsync();
+    }
+
+    /// <summary>Live spendable money across every linked account the household counts as
+    /// funds — checking/savings by default, never credit cards or loans.</summary>
+    public decimal BankFundsTotal(string? owner = null) => Data.PlaidAccounts
+        .Where(a => a.IncludeInFunds && (owner is null || a.Owner == owner))
+        .Sum(a => a.SpendableBalance);
 
     /// <summary>Folds bank transactions pulled from Plaid into the same Transactions list the
     /// manual Rocket Money CSV import uses — same dedup-by-SourceKey and bill-matching pass,
@@ -306,6 +358,14 @@ public class HouseholdStore
 
             if (amountMatch is not null)
             {
+                // The bank knows what was actually charged — keep the planned amount honest
+                // and remember the move so the UI can flag "went up $12" style changes.
+                if (transaction.Amount > 0 && amountMatch.Amount != transaction.Amount)
+                {
+                    amountMatch.LastAmountDelta = transaction.Amount - amountMatch.Amount;
+                    amountMatch.AmountUpdatedAt = transaction.Date;
+                    amountMatch.Amount = transaction.Amount;
+                }
                 amountMatch.LastPaidDate = transaction.Date;
                 amountMatch.ManualStatus = BillStatus.Upcoming;
                 transaction.MatchedBillId = amountMatch.Id;
