@@ -6,6 +6,9 @@ public class HouseholdData
     public List<Bill> Bills { get; set; } = [];
     public List<Recipe> Recipes { get; set; } = [];
     public List<GroceryItem> Groceries { get; set; } = [];
+    /// <summary>Names of everything ever added to the grocery list (capped), so the app can
+    /// offer one-tap re-adds of frequently bought items.</summary>
+    public List<string> GroceryHistory { get; set; } = [];
     public List<MealPlan> MealPlans { get; set; } = [];
     public List<SavingsGoal> SavingsGoals { get; set; } = [];
     public List<RecurringTransaction> RecurringTransactions { get; set; } = [];

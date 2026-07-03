@@ -118,6 +118,9 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .cal-day.selected{border-color:var(--organic);box-shadow:0 0 0 1px var(--organic)}
 .cal-pill.income{background:rgba(99,196,164,.3);color:var(--ink)}
 .cal-legend-item i.income-dot{background:rgba(99,196,164,.9)}
+.grocery-suggest{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.grocery-suggest button{border:1px dashed var(--line);background:transparent;color:var(--organic);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
+.grocery-suggest button:hover{border-color:var(--organic)}
 
 .funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
 
