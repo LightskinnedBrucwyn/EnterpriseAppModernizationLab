@@ -111,6 +111,8 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .badge.status-reserved{background:var(--lilac);color:#a8aeff}
 .badge.status-delayed{background:rgba(180,110,220,.2);color:#d49bf0}
 .badge.status-skipped{background:var(--line);color:var(--muted);text-decoration:line-through}
+.badge.status-overdue{background:rgba(255,90,90,.22);color:#ff8a8a}
+.cal-pill.status-overdue{outline:1px solid #ff8a8a}
 
 .funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
 

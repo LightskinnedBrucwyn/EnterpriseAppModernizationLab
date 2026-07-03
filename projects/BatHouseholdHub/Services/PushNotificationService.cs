@@ -35,13 +35,9 @@ public class PushNotificationService(IServiceScopeFactory scopeFactory, IConfigu
 
         var today = DateTime.Today;
         var horizon = today.AddDays(2);
-        var dueSoon = store.Data.Bills.Where(b => b.IsActive && b.EffectiveStatus(today) != BillStatus.Paid).Select(b =>
-        {
-            var dueDay = Math.Min(b.DueDay, DateTime.DaysInMonth(today.Year, today.Month));
-            var dueDate = new DateTime(today.Year, today.Month, dueDay);
-            if (dueDate < today) dueDate = dueDate.AddMonths(1);
-            return (Bill: b, DueDate: dueDate);
-        }).Where(x => x.DueDate <= horizon).ToList();
+        var dueSoon = store.Data.Bills.Where(b => b.IsActive && b.EffectiveStatus(today) != BillStatus.Paid)
+            .SelectMany(b => BillSchedule.DueDatesBetween(b, today, horizon).Select(due => (Bill: b, DueDate: due)))
+            .ToList();
 
         var vapid = new VapidDetails("mailto:household-hub@local", publicKey, privateKey);
         var client = new WebPushClient();

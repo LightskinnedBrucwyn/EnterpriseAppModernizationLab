@@ -2,7 +2,7 @@ using BatHouseholdHub.Models;
 
 namespace BatHouseholdHub.Services;
 
-public enum CashflowWindow { UntilNextPaycheck, ThisMonth, Next30Days, Custom }
+public enum CashflowWindow { UntilNextPaycheck, ThisMonth, Custom }
 
 public class CashflowSummary
 {
@@ -46,33 +46,9 @@ public class CashflowService(HouseholdStore store)
         var selectedDate = window switch
         {
             CashflowWindow.ThisMonth => new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month)),
-            CashflowWindow.Next30Days => today.AddDays(30),
             CashflowWindow.Custom => (customDate ?? today).Date,
             _ => nextPaycheck?.ExpectedDate.Date ?? today.AddDays(14)
         };
-
-        int DueDayThisCycle(Bill bill) => Math.Min(bill.DueDay, DateTime.DaysInMonth(today.Year, today.Month));
-        DateTime NextDueDate(Bill bill)
-        {
-            var dueDay = DueDayThisCycle(bill);
-            var dueThisMonth = new DateTime(today.Year, today.Month, dueDay);
-            return dueThisMonth >= today ? dueThisMonth : dueThisMonth.AddMonths(1);
-        }
-
-        // A biweekly bill hits twice in a month and a yearly one hits once a year — count
-        // every occurrence from the next due date through the end of the window instead of
-        // pretending everything is monthly.
-        decimal AmountDueBy(Bill bill, DateTime end)
-        {
-            var next = NextDueDate(bill);
-            if (next > end) return 0m;
-            var stepDays = bill.Frequency switch { BillFrequency.Weekly => 7, BillFrequency.Biweekly => 14, _ => 0 };
-            if (stepDays > 0) return bill.Amount * (1 + (int)((end - next).TotalDays / stepDays));
-            var stepMonths = bill.Frequency switch { BillFrequency.Quarterly => 3, BillFrequency.Yearly => 12, _ => 1 };
-            var occurrences = 0;
-            for (var due = next; due <= end; due = due.AddMonths(stepMonths)) occurrences++;
-            return bill.Amount * occurrences;
-        }
 
         bool IsBlockedByIncome(Bill bill)
         {
@@ -96,10 +72,12 @@ public class CashflowService(HouseholdStore store)
             .Concat(delayedBlocked.Select(x => x.Id))
             .Concat(pending.Select(x => x.Id))
             .ToHashSet();
-        var dueBeforeSelected = unpaid.Where(x => !excludedIds.Contains(x.Id) && NextDueDate(x) <= selectedDate).ToList();
+        // AmountDueBetween counts every occurrence in the window and keeps an unpaid
+        // past-due cycle in the total — an overdue bill is still owed, not next month's problem.
+        var dueBeforeSelected = unpaid.Where(x => !excludedIds.Contains(x.Id)).ToList();
 
-        var upcomingBeforeSelected = dueBeforeSelected.Where(x => x.Category != BillCategory.DebtPayment).Sum(x => AmountDueBy(x, selectedDate));
-        var requiredDebtBeforeSelected = dueBeforeSelected.Where(x => x.Category == BillCategory.DebtPayment).Sum(x => AmountDueBy(x, selectedDate));
+        var upcomingBeforeSelected = dueBeforeSelected.Where(x => x.Category != BillCategory.DebtPayment).Sum(x => BillSchedule.AmountDueBetween(x, today, selectedDate));
+        var requiredDebtBeforeSelected = dueBeforeSelected.Where(x => x.Category == BillCategory.DebtPayment).Sum(x => BillSchedule.AmountDueBetween(x, today, selectedDate));
         var pendingTotal = pending.Sum(x => x.Amount);
         var reservedTotal = reserved.Sum(x => x.Amount);
 
@@ -127,8 +105,8 @@ public class CashflowService(HouseholdStore store)
             BufferAmount = data.Funds.Buffer,
             AmountLeftAfterBuffer = amountLeftAfterBuffer,
             NextPaycheck = nextPaycheck,
-            BillsDueThisWeek = unpaid.Sum(x => AmountDueBy(x, weekEnd)),
-            BillsDueThisMonth = unpaid.Sum(x => AmountDueBy(x, monthEnd)),
+            BillsDueThisWeek = unpaid.Sum(x => BillSchedule.AmountDueBetween(x, today, weekEnd)),
+            BillsDueThisMonth = unpaid.Sum(x => BillSchedule.AmountDueBetween(x, today, monthEnd)),
             UnpaidBills = unpaid,
             PaidBills = paid,
             PendingBills = pending,

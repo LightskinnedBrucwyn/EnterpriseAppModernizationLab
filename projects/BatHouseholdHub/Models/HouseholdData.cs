@@ -129,7 +129,9 @@ public class RecurringTransaction
 
 public enum BillCategory { DebtPayment, FixedBill, TransferSavings }
 public enum BillFrequency { Monthly, Weekly, Biweekly, Quarterly, Yearly }
-public enum BillStatus { Upcoming, Pending, Paid, Reserved, Delayed, NeedsReview, Skipped }
+// Overdue is computed-only (never stored in ManualStatus) and MUST stay last: statuses
+// persist as numbers in household.json, so reordering would corrupt existing saves.
+public enum BillStatus { Upcoming, Pending, Paid, Reserved, Delayed, NeedsReview, Skipped, Overdue }
 public enum MoneyType { Cash, Income, Expense, Transfer, RentReserve, DebtPayment, SavingsMove }
 
 public class Bill
@@ -161,8 +163,10 @@ public class Bill
         _ => Amount
     };
 
-    public bool IsPaidThisCycle(DateTime asOf) => LastPaidDate is { } d && d.Year == asOf.Year && d.Month == asOf.Month;
-    public BillStatus EffectiveStatus(DateTime asOf) => IsPaidThisCycle(asOf) ? BillStatus.Paid : ManualStatus;
+    // Cycle math lives in Services.BillSchedule — one implementation shared by cashflow,
+    // the calendar, and notifications. These stay as instance methods so call sites read well.
+    public bool IsPaidThisCycle(DateTime asOf) => Services.BillSchedule.IsPaidThisCycle(this, asOf);
+    public BillStatus EffectiveStatus(DateTime asOf) => Services.BillSchedule.EffectiveStatus(this, asOf);
 }
 
 public class DebtAccount
@@ -292,6 +296,7 @@ public static class BillStatusExtensions
         BillStatus.Delayed => "Waiting on income",
         BillStatus.NeedsReview => "Needs review",
         BillStatus.Skipped => "Skipped",
+        BillStatus.Overdue => "Overdue",
         _ => "Upcoming"
     };
 
@@ -303,6 +308,7 @@ public static class BillStatusExtensions
         BillStatus.Delayed => "status-delayed",
         BillStatus.NeedsReview => "status-review",
         BillStatus.Skipped => "status-skipped",
+        BillStatus.Overdue => "status-overdue",
         _ => "status-upcoming"
     };
 }

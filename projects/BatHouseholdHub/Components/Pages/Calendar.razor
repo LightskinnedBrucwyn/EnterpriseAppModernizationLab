@@ -48,15 +48,14 @@
 </div>
 
 <section class="panel" style="margin-top:24px">
-    <div class="panel-head"><div><span class="kicker">THIS MONTH</span><h2>Calendar totals</h2></div><b>@MonthTotal.ToString("C")<small> due in @CurrentMonth.ToString("MMMM")</small></b></div>
+    <div class="panel-head"><div><span class="kicker">THIS MONTH</span><h2>Calendar totals</h2></div><b>@BillCal.MonthTotal(CurrentMonth.Year, CurrentMonth.Month).ToString("C")<small> due in @CurrentMonth.ToString("MMMM")</small></b></div>
     <div class="bill-list">
         @foreach (var group in Enum.GetValues<BillCategory>())
         {
-            var bills = Store.Data.Bills.Where(x => x.IsActive && x.Category == group).ToList();
             <div class="bill-row">
                 <span class="bill-dot @group.CssClass()"></span>
-                <div class="bill-info"><strong>@group.Label()</strong><small>@bills.Count bills</small></div>
-                <b>@bills.Sum(x => x.Amount).ToString("C")</b>
+                <div class="bill-info"><strong>@group.Label()</strong><small>@BillCal.MonthCountForCategory(CurrentMonth.Year, CurrentMonth.Month, group) due dates this month</small></div>
+                <b>@BillCal.MonthTotalForCategory(CurrentMonth.Year, CurrentMonth.Month, group).ToString("C")</b>
             </div>
         }
     </div>
@@ -77,6 +76,4 @@
         for (var i = 0; i < leadingBlanks; i++) yield return new Cell(null);
         for (var day = 1; day <= daysInMonth; day++) yield return new Cell(new DateTime(CurrentMonth.Year, CurrentMonth.Month, day));
     }
-
-    decimal MonthTotal => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.Amount);
 }

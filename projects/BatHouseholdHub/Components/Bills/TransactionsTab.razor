@@ -235,7 +235,7 @@
     bool CompactView = true;
     decimal LargeExpenseThreshold = 500;
     string[] Categories = ["Other", "Groceries", "Bills", "Dining", "Home", "Fun", "Transport", "Income"];
-    IEnumerable<Transaction> Month => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year);
+    IEnumerable<Transaction> Month => Store.Data.Transactions.InMonth(DateTime.Today);
     IEnumerable<string> AvailableCategories => Store.Data.Transactions.Select(x => x.Category).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
     IEnumerable<string> AvailableAccounts => Store.Data.Transactions.Select(x => x.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
     IEnumerable<Transaction> FilteredTransactions
@@ -272,7 +272,7 @@
     decimal TxIncome => Month.Where(x => x.IsIncome).Sum(x => x.Amount);
     decimal TxSpending => Month.Where(x => !x.IsIncome).Sum(x => x.Amount);
     decimal TxShared => Month.Where(x => !x.IsIncome && x.Owner == "Shared").Sum(x => x.Amount);
-    IEnumerable<Transaction> LastMonth => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.AddMonths(-1).Month && x.Date.Year == DateTime.Today.AddMonths(-1).Year);
+    IEnumerable<Transaction> LastMonth => Store.Data.Transactions.InMonth(DateTime.Today.AddMonths(-1));
     decimal LastMonthSpending => LastMonth.Where(x => !x.IsIncome).Sum(x => x.Amount);
     decimal SpendDelta => TxSpending - LastMonthSpending;
     IEnumerable<(string Category, decimal Amount)> TopCategoriesThisMonth => Month.Where(x => !x.IsIncome)
