@@ -12,13 +12,13 @@ window.vantaClouds = {
             gyroControls: false,
             minHeight: 200,
             minWidth: 200,
-            speed: 0.7,
-            skyColor: 0x0c1118,
-            cloudColor: 0x2c3744,
-            cloudShadowColor: 0x05070a,
-            sunColor: 0xffb877,
-            sunGlareColor: 0xff9f43,
-            sunlightColor: 0xffd4a3
+            speed: 0.6,
+            skyColor: 0x0d1d1a,
+            cloudColor: 0x27403a,
+            cloudShadowColor: 0x040b09,
+            sunColor: 0xd8efe0,
+            sunGlareColor: 0x9fcfc0,
+            sunlightColor: 0xcfe9db
         });
     },
     dispose() {
