@@ -1,4 +1,5 @@
 @inject ActivePersonService ActivePerson
+@inject HouseholdStore Store
 
 <header class="topnav">
     <a class="brand" href="">
@@ -15,9 +16,92 @@
     </nav>
     <div class="topnav-right">
         <a class="nav-search" href="shopping-tracker" title="Search">⌕</a>
+        <button class="nav-search" title="@(Store.HasPin(ActivePerson.Current) ? $"Change {ActivePerson.Current}'s PIN" : $"Set a PIN for {ActivePerson.Current}")" @onclick="OpenSetPin">@(Store.HasPin(ActivePerson.Current) ? "🔒" : "🔓")</button>
         <div class="avatar-pair">
-            <button class="avatar-m @(ActivePerson.Current == "Trey" ? "active" : "")" title="Trey's view" @onclick='() => ActivePerson.SetActive("Trey")'>M</button>
-            <button class="avatar-j @(ActivePerson.Current == "Jess" ? "active" : "")" title="Jess's view" @onclick='() => ActivePerson.SetActive("Jess")'>J</button>
+            <button class="avatar-m @(ActivePerson.Current == "Trey" ? "active" : "")" title="Trey's view" @onclick='() => RequestSwitch("Trey")'>M</button>
+            <button class="avatar-j @(ActivePerson.Current == "Jess" ? "active" : "")" title="Jess's view" @onclick='() => RequestSwitch("Jess")'>J</button>
         </div>
     </div>
 </header>
+
+@if (PinTarget is not null)
+{
+    <div class="pin-overlay" @onclick="ClosePin">
+        <div class="pin-modal panel" @onclick:stopPropagation="true">
+            @if (SettingPin)
+            {
+                <h2>@(Store.HasPin(PinTarget) ? $"Change {PinTarget}'s PIN" : $"Set a PIN for {PinTarget}")</h2>
+                <p class="muted">Locks @PinTarget's view and private transaction details behind a PIN on every device.</p>
+                @if (Store.HasPin(PinTarget))
+                {
+                    <input type="password" inputmode="numeric" maxlength="8" placeholder="Current PIN" @bind="CurrentPinEntry" @bind:event="oninput" />
+                }
+                <input type="password" inputmode="numeric" maxlength="8" placeholder="New PIN (4–8 digits)" @bind="PinEntry" @bind:event="oninput" />
+                @if (!string.IsNullOrWhiteSpace(PinError)) { <p class="pin-error">@PinError</p> }
+                <div class="form-actions">
+                    <button class="button primary" @onclick="SavePin">Save PIN</button>
+                    <button class="text-button" @onclick="ClosePin">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <h2>@PinTarget's view is locked</h2>
+                <p class="muted">Enter @PinTarget's PIN to switch and see their private details.</p>
+                <input type="password" inputmode="numeric" maxlength="8" placeholder="PIN" @bind="PinEntry" @bind:event="oninput" @onkeydown="PinKeydown" />
+                @if (!string.IsNullOrWhiteSpace(PinError)) { <p class="pin-error">@PinError</p> }
+                <div class="form-actions">
+                    <button class="button primary" @onclick="TryUnlock">Unlock</button>
+                    <button class="text-button" @onclick="ClosePin">Cancel</button>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    string? PinTarget;
+    bool SettingPin;
+    string PinEntry = "", CurrentPinEntry = "", PinError = "";
+
+    void RequestSwitch(string person)
+    {
+        if (ActivePerson.IsUnlocked(person)) { ActivePerson.SetActive(person); return; }
+        PinTarget = person;
+        SettingPin = false;
+        PinEntry = ""; PinError = "";
+    }
+
+    void OpenSetPin()
+    {
+        PinTarget = ActivePerson.Current;
+        SettingPin = true;
+        PinEntry = ""; CurrentPinEntry = ""; PinError = "";
+    }
+
+    void ClosePin() { PinTarget = null; PinEntry = ""; CurrentPinEntry = ""; PinError = ""; }
+
+    void TryUnlock()
+    {
+        if (PinTarget is null) return;
+        if (ActivePerson.Unlock(PinTarget, PinEntry))
+        {
+            ActivePerson.SetActive(PinTarget);
+            ClosePin();
+        }
+        else { PinError = "That's not it — try again."; PinEntry = ""; }
+    }
+
+    void PinKeydown(KeyboardEventArgs e) { if (e.Key == "Enter") TryUnlock(); }
+
+    async Task SavePin()
+    {
+        if (PinTarget is null) return;
+        if (PinEntry.Length is < 4 or > 8 || !PinEntry.All(char.IsDigit))
+        { PinError = "PIN must be 4–8 digits."; return; }
+        if (Store.HasPin(PinTarget) && !Store.VerifyPin(PinTarget, CurrentPinEntry))
+        { PinError = "Current PIN is wrong."; return; }
+        await Store.SetPinAsync(PinTarget, PinEntry);
+        ActivePerson.Unlock(PinTarget, PinEntry);
+        ClosePin();
+    }
+}

@@ -211,6 +211,28 @@ public class HouseholdStore
         .Where(a => a.IncludeInFunds && (owner is null || a.Owner == owner))
         .Sum(a => a.SpendableBalance);
 
+    public bool HasPin(string name) =>
+        Data.Profiles.Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(p.PinHash));
+
+    public async Task SetPinAsync(string name, string pin)
+    {
+        var salt = RandomNumberGenerator.GetBytes(16);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(pin, salt, 100_000, HashAlgorithmName.SHA256, 32);
+        var profile = Data.Profiles.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (profile is null) { profile = new PersonProfile { Name = name }; Data.Profiles.Add(profile); }
+        profile.Salt = Convert.ToBase64String(salt);
+        profile.PinHash = Convert.ToBase64String(hash);
+        await SaveAsync();
+    }
+
+    public bool VerifyPin(string name, string pin)
+    {
+        var profile = Data.Profiles.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (profile is null || string.IsNullOrEmpty(profile.PinHash)) return false;
+        var hash = Rfc2898DeriveBytes.Pbkdf2(pin, Convert.FromBase64String(profile.Salt), 100_000, HashAlgorithmName.SHA256, 32);
+        return CryptographicOperations.FixedTimeEquals(hash, Convert.FromBase64String(profile.PinHash));
+    }
+
     /// <summary>Folds bank transactions pulled from Plaid into the same Transactions list the
     /// manual Rocket Money CSV import uses — same dedup-by-SourceKey and bill-matching pass,
     /// so a bank-synced bill payment marks the bill Paid exactly like a CSV import would.</summary>

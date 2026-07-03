@@ -42,13 +42,15 @@ else
             {
                 @foreach (var item in Store.Data.PlaidItems)
                 {
+                    var canManageItem = CanManage(item.Owner);
                     <div class="bill-row">
                         <span class="bill-dot fixed"></span>
                         <div class="bill-info">
                             <strong>@item.InstitutionName</strong>
-                            <small>@item.Owner · @(item.LastSyncedAt is { } d ? $"last synced {d:MMM d, h:mm tt}" : "not synced yet")</small>
+                            <small>@item.Owner · @(item.LastSyncedAt is { } d ? $"last synced {d:MMM d, h:mm tt}" : "not synced yet")@(canManageItem ? "" : " · 🔒 unlock to manage")</small>
                         </div>
-                        <button class="delete-button" title="Disconnect" @onclick="() => Disconnect(item.Id)">×</button>
+                        @if (canManageItem)
+                        { <button class="delete-button" title="Disconnect" @onclick="() => Disconnect(item.Id)">×</button> }
                     </div>
                     @foreach (var account in Store.Data.PlaidAccounts.Where(a => a.ItemId == item.ItemId))
                     {
@@ -59,12 +61,15 @@ else
                                 <small>@account.Type · updated @account.LastUpdated.ToString("MMM d, h:mm tt")</small>
                             </div>
                             <b>@account.SpendableBalance.ToString("C")</b>
-                            <span class="row-actions">
-                                <select value="@account.Owner" @onchange="e => SetAccountOwner(account, e.Value)">
-                                    <option>Shared</option><option>Trey</option><option>Jess</option>
-                                </select>
-                                <label class="check-label"><input type="checkbox" checked="@account.IncludeInFunds" @onchange="e => SetAccountInclude(account, e.Value)" /> Count in funds</label>
-                            </span>
+                            @if (CanManage(account.Owner))
+                            {
+                                <span class="row-actions">
+                                    <select value="@account.Owner" @onchange="e => SetAccountOwner(account, e.Value)">
+                                        <option>Shared</option><option>Trey</option><option>Jess</option>
+                                    </select>
+                                    <label class="check-label"><input type="checkbox" checked="@account.IncludeInFunds" @onchange="e => SetAccountInclude(account, e.Value)" /> Count in funds</label>
+                                </span>
+                            }
                         </div>
                     }
                 }
@@ -122,6 +127,8 @@ else
 
     async Task SetAccountInclude(PlaidAccount account, object? value) =>
         await Store.SetPlaidAccountIncludeAsync(account.AccountId, value is bool b && b);
+
+    bool CanManage(string owner) => owner == "Shared" || ActivePerson.IsUnlocked(owner);
 
     class PlaidLinkResult
     {

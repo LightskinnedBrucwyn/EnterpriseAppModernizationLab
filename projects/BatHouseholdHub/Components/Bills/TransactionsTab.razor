@@ -103,6 +103,17 @@
     }
 </section>
 
+@foreach (var locked in LockedSummaries)
+{
+    <section class="panel" style="margin-bottom:20px">
+        <div class="panel-head">
+            <div><span class="kicker">🔒 PRIVATE</span><h2>@locked.Person's transactions</h2></div>
+            <b>@locked.MonthSpend.ToString("C")<small> spent this month</small></b>
+        </div>
+        <p class="muted">@locked.MonthCount transaction(s) this month. The household totals above include them — unlock @locked.Person's profile from the top bar to see the details.</p>
+    </section>
+}
+
 <section class="transaction-browser">
     <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction history</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div>
         <div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div>
@@ -206,7 +217,27 @@
 
     public void Dispose() => ActivePerson.Changed -= OnActivePersonChanged;
 
-    IEnumerable<Transaction> NeedsReview => Store.Data.Transactions.Where(x => x.NeedsReview).OrderByDescending(x => x.Date);
+    // "Me" is Trey in the Rocket Money import's owner labels; Plaid items use real names.
+    static string? OwnerPerson(string owner) => owner switch
+    {
+        "Me" or "Trey" => "Trey",
+        "Jess" => "Jess",
+        _ => null
+    };
+
+    bool CanSee(Transaction t) => OwnerPerson(t.Owner) is not { } person || ActivePerson.IsUnlocked(person);
+
+    IEnumerable<Transaction> VisibleToViewer => Store.Data.Transactions.Where(CanSee);
+
+    record LockedSummary(string Person, int MonthCount, decimal MonthSpend);
+    IEnumerable<LockedSummary> LockedSummaries => Store.Data.Transactions
+        .Where(t => !CanSee(t))
+        .GroupBy(t => OwnerPerson(t.Owner)!)
+        .Select(g => new LockedSummary(g.Key,
+            g.Count(t => t.Date.Year == DateTime.Today.Year && t.Date.Month == DateTime.Today.Month),
+            g.Where(t => !t.IsIncome && t.Date.Year == DateTime.Today.Year && t.Date.Month == DateTime.Today.Month).Sum(t => t.Amount)));
+
+    IEnumerable<Transaction> NeedsReview => VisibleToViewer.Where(x => x.NeedsReview).OrderByDescending(x => x.Date);
 
     async Task ResolveReview(Transaction transaction)
     {
@@ -236,14 +267,14 @@
     decimal LargeExpenseThreshold = 500;
     string[] Categories = ["Other", "Groceries", "Bills", "Dining", "Home", "Fun", "Transport", "Income"];
     IEnumerable<Transaction> Month => Store.Data.Transactions.InMonth(DateTime.Today);
-    IEnumerable<string> AvailableCategories => Store.Data.Transactions.Select(x => x.Category).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
-    IEnumerable<string> AvailableAccounts => Store.Data.Transactions.Select(x => x.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<string> AvailableCategories => VisibleToViewer.Select(x => x.Category).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<string> AvailableAccounts => VisibleToViewer.Select(x => x.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
     IEnumerable<Transaction> FilteredTransactions
     {
         get
         {
             var today = DateTime.Today;
-            IEnumerable<Transaction> query = Store.Data.Transactions;
+            IEnumerable<Transaction> query = VisibleToViewer;
             query = DateFilter switch
             {
                 "This month" => query.Where(x => x.Date.Year == today.Year && x.Date.Month == today.Month),

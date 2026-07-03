@@ -121,6 +121,12 @@ button,input,select,textarea{font:inherit}button,a{transition:.18s ease}a{color:
 .grocery-suggest{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
 .grocery-suggest button{border:1px dashed var(--line);background:transparent;color:var(--organic);border-radius:99px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer}
 .grocery-suggest button:hover{border-color:var(--organic)}
+.pin-overlay{position:fixed;inset:0;z-index:100;background:rgba(3,8,7,.72);display:grid;place-items:center;backdrop-filter:blur(6px)}
+.pin-modal{width:min(360px,90vw);display:flex;flex-direction:column;gap:12px}
+.pin-modal h2{font:700 20px 'Fraunces',serif;margin:0}
+.pin-modal p{margin:0}
+.pin-modal input{border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.06);padding:12px;color:var(--ink);font-size:18px;letter-spacing:.3em;text-align:center}
+.pin-error{color:#ff8a8a;font-size:13px;font-weight:600;margin:0}
 
 .funds-panel .panel-head b{font:700 22px 'Fraunces',serif}
 

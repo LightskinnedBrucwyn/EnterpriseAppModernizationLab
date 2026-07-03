@@ -24,6 +24,17 @@ public class HouseholdData
     public List<PlaidAccount> PlaidAccounts { get; set; } = [];
     public HouseholdFunds Funds { get; set; } = new();
     public HomeButlerSettings HomeButler { get; set; } = new();
+    public List<PersonProfile> Profiles { get; set; } = [];
+}
+
+/// <summary>A household member's profile lock. When a PIN is set, switching the app to this
+/// person (and seeing their private transaction details) requires entering it once per
+/// browser session. Stored as PBKDF2 hash + salt — the PIN itself is never persisted.</summary>
+public class PersonProfile
+{
+    public string Name { get; set; } = "";
+    public string PinHash { get; set; } = "";
+    public string Salt { get; set; } = "";
 }
 
 /// <summary>A linked bank connection via Plaid — one per institution a household member
