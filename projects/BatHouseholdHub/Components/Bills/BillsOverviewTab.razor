@@ -1,0 +1,168 @@
+@inject HouseholdStore Store
+@inject CashflowService Cashflow
+
+<section class="panel funds-panel">
+    <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@Store.Data.Funds.Total.ToString("C")</b></div>
+    <div class="form-grid">
+        <label>Trey<input type="number" step=".01" @bind="FundsDraft.Trey" /></label>
+        <label>Jess<input type="number" step=".01" @bind="FundsDraft.Jess" /></label>
+        <label>Shared<input type="number" step=".01" @bind="FundsDraft.Shared" /></label>
+        <label>Buffer to keep aside<input type="number" step=".01" @bind="FundsDraft.Buffer" /></label>
+    </div>
+    <div class="form-actions">
+        <button class="button primary" @onclick="SaveFunds">Save funds</button>
+        <small class="muted">Last updated @Store.Data.Funds.LastUpdated.ToString("MMM d, yyyy")</small>
+    </div>
+</section>
+
+<section class="panel money-math">
+    <div class="panel-head"><div><span class="kicker">THE MATH</span><h2>Where that number comes from</h2></div></div>
+    <div class="food-tabs">
+        <button class="@(Window == CashflowWindow.UntilNextPaycheck ? "active" : "")" @onclick="() => SetWindow(CashflowWindow.UntilNextPaycheck)">Until next paycheck</button>
+        <button class="@(Window == CashflowWindow.ThisMonth ? "active" : "")" @onclick="() => SetWindow(CashflowWindow.ThisMonth)">This month</button>
+        <button class="@(Window == CashflowWindow.Next30Days ? "active" : "")" @onclick="() => SetWindow(CashflowWindow.Next30Days)">Next 30 days</button>
+        <button class="@(Window == CashflowWindow.Custom ? "active" : "")" @onclick="() => SetWindow(CashflowWindow.Custom)">Custom date</button>
+    </div>
+    @if (Window == CashflowWindow.Custom)
+    {
+        <label>Through<input type="date" @bind="BoundCustomDate" /></label>
+    }
+    <div class="math-rows">
+        <div class="math-row"><span>Money we have now</span><b>@Summary.CurrentFunds.ToString("C")</b></div>
+        <div class="math-row"><span>Already spoken for<small>payments processing + money set aside</small></span><b>− @((Summary.PendingPayments + Summary.ReservedMoney).ToString("C"))</b></div>
+        <div class="math-row"><span>Bills due by @Summary.SelectedDate.ToString("MMM d")<small>including debt payments</small></span><b>− @((Summary.UpcomingBillsBeforeSelectedDate + Summary.RequiredDebtPaymentsBeforeSelectedDate).ToString("C"))</b></div>
+        <div class="math-row"><span>Income expected by then</span><b>+ @Summary.ExpectedIncomeBeforeSelectedDate.ToString("C")</b></div>
+        <div class="math-row"><span>Buffer we keep aside</span><b>− @Summary.BufferAmount.ToString("C")</b></div>
+        <div class="math-row total"><span>Safe to spend</span><b>@Summary.AmountLeftAfterBuffer.ToString("C")</b></div>
+    </div>
+</section>
+
+<section class="panel">
+    <div class="panel-head"><div><span class="kicker">UPCOMING BILLS</span><h2>Coming up</h2></div><button class="text-button" @onclick="() => OnSeeAllBills.InvokeAsync()">See all bills →</button></div>
+    @{ var upcomingOnly = Summary.UnpaidBills.Where(x => x.EffectiveStatus(DateTime.Today) == BillStatus.Upcoming).OrderBy(x => x.DueDay).Take(5).ToList(); }
+    @if (!upcomingOnly.Any())
+    {
+        <p class="muted">Nothing unpaid right now.</p>
+    }
+    else
+    {
+        <div class="bill-list">
+            @foreach (var bill in upcomingOnly)
+            { <BillRowView Bill="bill" Notify="Notify" OnEdit="OnEditBill" /> }
+        </div>
+    }
+</section>
+
+<section class="panel goal-panel">
+    @if (Goal is null || EditingGoal)
+    {
+        <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@(Goal is null ? "No goal set yet" : "Edit goal")</h2></div><span>🌱</span></div>
+        <div class="form-grid">
+            <label>Goal name<input @bind="GoalDraft.Name" placeholder="Emergency cushion, house, trip…" /></label>
+            <label>Already saved<input type="number" step=".01" @bind="GoalDraft.Current" /></label>
+            <label>Target<input type="number" step=".01" @bind="GoalDraft.Target" /></label>
+        </div>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(GoalDraft.Name) || GoalDraft.Target <= 0)" @onclick="SaveGoal">Save goal</button>
+            @if (Goal is not null) { <button class="text-button" @onclick="() => EditingGoal = false">Cancel</button> }
+        </div>
+    }
+    else
+    {
+        <div class="panel-head"><div><span class="kicker">SAVING TOGETHER</span><h2>@Goal.Name</h2></div><button class="icon-button" title="Edit goal" @onclick="StartEditGoal">✎</button></div>
+        <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
+        <div class="progress"><i style="width:@GoalPercent%"></i></div>
+        <p>@GoalPercent% there. Every bit counts.</p>
+        <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
+    }
+</section>
+
+<section class="panel upload-panel">
+    <div class="panel-head"><div><span class="kicker">HOUSEHOLD INBOX</span><h2>Drop anything here</h2><p class="muted">Receipts, lease docs, loan paperwork — whatever needs a home.</p></div></div>
+    <div class="upload-controls">
+        <input @bind="UploadNote" @bind:event="oninput" placeholder="What is this? (optional note)" />
+        <label class="button primary upload-button">@(IsUploading ? "Uploading…" : "Choose file")<InputFile OnChange="UploadFile" disabled="@IsUploading" /></label>
+    </div>
+    @if (Store.Data.UploadedFiles.Count > 0)
+    {
+        <div class="upload-list">
+            @foreach (var file in Store.Data.UploadedFiles.OrderByDescending(x => x.UploadedAt))
+            {
+                <div class="upload-row">
+                    <a href="/uploads/@file.Id" target="_blank">@file.FileName</a>
+                    <small>@(string.IsNullOrWhiteSpace(file.Note) ? "" : file.Note + " · ")@(file.SizeBytes / 1024) KB · @file.UploadedAt.ToLocalTime().ToString("MMM d")</small>
+                    <button class="delete-button" title="Remove" @onclick="() => DeleteUpload(file.Id)">×</button>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+<aside class="privacy-note">🔒 Only bill names and amounts are stored. No account numbers.</aside>
+
+@code {
+    [Parameter] public CashflowWindow Window { get; set; }
+    [Parameter] public EventCallback<CashflowWindow> WindowChanged { get; set; }
+    [Parameter] public DateTime CustomDate { get; set; }
+    [Parameter] public EventCallback<DateTime> CustomDateChanged { get; set; }
+    [Parameter] public EventCallback<Toast> Notify { get; set; }
+    [Parameter] public EventCallback<Bill> OnEditBill { get; set; }
+    [Parameter] public EventCallback OnSeeAllBills { get; set; }
+
+    HouseholdFunds FundsDraft = new();
+    CashflowSummary Summary => Cashflow.BuildSummary(Window, CustomDate);
+
+    protected override void OnInitialized() => FundsDraft = new()
+    {
+        Trey = Store.Data.Funds.Trey, Jess = Store.Data.Funds.Jess,
+        Shared = Store.Data.Funds.Shared, Buffer = Store.Data.Funds.Buffer
+    };
+
+    Task SetWindow(CashflowWindow window) => WindowChanged.InvokeAsync(window);
+
+    DateTime BoundCustomDate
+    {
+        get => CustomDate;
+        set { if (value != CustomDate) _ = CustomDateChanged.InvokeAsync(value); }
+    }
+
+    async Task SaveFunds()
+    {
+        Store.Data.Funds.Trey = FundsDraft.Trey;
+        Store.Data.Funds.Jess = FundsDraft.Jess;
+        Store.Data.Funds.Shared = FundsDraft.Shared;
+        Store.Data.Funds.Buffer = FundsDraft.Buffer;
+        Store.Data.Funds.LastUpdated = DateTime.Today;
+        await Store.SaveAsync();
+        await Notify.InvokeAsync(new Toast("Saved available funds."));
+    }
+
+    SavingsGoal? Goal => Store.Data.SavingsGoals.FirstOrDefault();
+    SavingsGoal GoalDraft = new();
+    bool EditingGoal;
+    int GoalPercent => Goal is null || Goal.Target == 0 ? 0 : (int)Math.Min(100, Goal.Current / Goal.Target * 100);
+    void StartEditGoal() { if (Goal is not null) { GoalDraft = new() { Id = Goal.Id, Name = Goal.Name, Current = Goal.Current, Target = Goal.Target }; EditingGoal = true; } }
+    async Task SaveGoal()
+    {
+        if (Goal is { } existing) { existing.Name = GoalDraft.Name; existing.Current = GoalDraft.Current; existing.Target = GoalDraft.Target; }
+        else { Store.Data.SavingsGoals.Add(GoalDraft); }
+        await Store.SaveAsync();
+        GoalDraft = new();
+        EditingGoal = false;
+    }
+
+    string UploadNote = "";
+    bool IsUploading;
+    async Task UploadFile(InputFileChangeEventArgs args)
+    {
+        IsUploading = true;
+        try
+        {
+            await using var stream = args.File.OpenReadStream(50 * 1024 * 1024);
+            await Store.SaveUploadAsync(stream, args.File.Name, args.File.ContentType, UploadNote);
+            UploadNote = "";
+        }
+        finally { IsUploading = false; }
+    }
+    async Task DeleteUpload(Guid id) => await Store.DeleteUploadAsync(id);
+}

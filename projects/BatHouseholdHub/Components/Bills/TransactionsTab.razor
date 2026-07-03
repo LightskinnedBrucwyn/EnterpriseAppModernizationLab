@@ -1,0 +1,377 @@
+@implements IDisposable
+@inject HouseholdStore Store
+@inject ILoggerFactory LoggerFactory
+@inject ActivePersonService ActivePerson
+
+<div class="form-actions" style="margin-bottom:20px">
+    <button class="button magic" @onclick="() => ShowRocketImport = !ShowRocketImport">🚀 Rocket Money import</button>
+</div>
+
+@if (ShowRocketImport)
+{
+    <section class="panel rocket-import">
+        <div class="rocket-copy"><span class="rocket-mark">🚀</span><div><span class="kicker">ROCKET MONEY IMPORT</span><h2>Update from your real accounts</h2><p>Transfers, card payments, savings moves, and investments are excluded so they aren’t counted twice.</p></div></div>
+        <div class="import-controls">
+            <label>Assign this export to<select @bind="ImportOwner"><option>Me</option><option>Jess</option><option>Shared</option></select></label>
+            <label class="check-label"><input type="checkbox" @bind="ReplaceTransactions" /> Replace current transactions</label>
+            <label class="button magic upload-button">@(IsImporting ? "Importing…" : "Choose Rocket CSV")<InputFile OnChange="ImportRocket" accept=".csv,text/csv" disabled="@IsImporting" /></label>
+        </div>
+    </section>
+}
+
+@if (!string.IsNullOrWhiteSpace(ImportError)) { <div class="import-message error">@ImportError</div> }
+@if (RocketResult is not null)
+{
+    <div class="import-message success"><strong>✓ Rocket Money is up to date</strong><span>@RocketResult.Imported.ToString("N0") transactions imported · @RocketResult.ExcludedTransfers.ToString("N0") transfers excluded · @RocketResult.AccountCount accounts · @RocketResult.EarliestDate?.ToString("MMM yyyy")–@RocketResult.LatestDate?.ToString("MMM yyyy")</span></div>
+}
+
+@if (NeedsReview.Any())
+{
+    <section class="panel">
+        <div class="panel-head"><div><span class="kicker">NEEDS REVIEW</span><h2>Imported transactions we couldn't match</h2></div></div>
+        <div class="bill-list">
+            @foreach (var transaction in NeedsReview)
+            {
+                <div class="bill-row">
+                    <span class="bill-dot fixed"></span>
+                    <div class="bill-info"><strong>@transaction.Description</strong><small>@transaction.Date.ToString("MMM d") · @transaction.Account</small></div>
+                    <span class="badge status-review">Needs review</span>
+                    <b>@transaction.Amount.ToString("C")</b>
+                    <span class="row-actions">
+                        <select @onchange="e => LinkTransaction(transaction, e.Value)">
+                            <option value="">Link to a bill…</option>
+                            @foreach (var bill in Store.Data.Bills.Where(x => x.IsActive))
+                            { <option value="@bill.Id">@bill.Name</option> }
+                        </select>
+                        <button class="text-button" @onclick="() => ResolveReview(transaction)">Resolve</button>
+                    </span>
+                </div>
+            }
+        </div>
+    </section>
+}
+
+@if (ShowForm)
+{
+    <section class="panel form-panel" id="add">
+        <div class="panel-head"><h2>@(EditingTxId is null ? "New transaction" : "Edit transaction")</h2><button class="icon-button" @onclick="CloseTxForm">×</button></div>
+        <div class="form-grid">
+            <label>Description<input @bind="TxDraft.Description" placeholder="Coffee, rent, paycheck…" /></label>
+            <label>Amount<input type="number" step="0.01" @bind="TxDraft.Amount" /></label>
+            <label>Category<select @bind="TxDraft.Category">@foreach (var c in Categories) { <option>@c</option> }</select></label>
+            <label>Who?<select @bind="TxDraft.Owner"><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+            <label>Date<input type="date" @bind="TxDraft.Date" /></label>
+            <label class="check-label"><input type="checkbox" @bind="TxDraft.IsIncome" /> This is income</label>
+            @if (EditingTxId is null)
+            {
+                <label class="check-label"><input type="checkbox" @bind="MakeRecurring" /> Repeat monthly</label>
+                @if (MakeRecurring) { <label>Post on day<input type="number" min="1" max="28" @bind="RecurringDay" /></label> }
+            }
+        </div>
+        <div class="form-actions">
+            <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(TxDraft.Description) || TxDraft.Amount <= 0)" @onclick="SaveTransaction">@(EditingTxId is null ? "Save transaction" : "Update transaction")</button>
+            <button class="text-button" @onclick="ClearTxForm">Clear</button>
+        </div>
+    </section>
+}
+
+<section class="stat-grid compact">
+    <div class="stat-card sage"><span>Income</span><strong>@TxIncome.ToString("C")</strong></div>
+    <div class="stat-card peach"><span>Spent</span><strong>@TxSpending.ToString("C")</strong></div>
+    <div class="stat-card butter"><span>Remaining</span><strong>@((TxIncome - TxSpending).ToString("C"))</strong></div>
+    <div class="stat-card lilac"><span>Shared spending</span><strong>@TxShared.ToString("C")</strong></div>
+</section>
+
+<section class="panel spending-pulse">
+    <div class="panel-head"><div><span class="kicker">SPENDING PULSE</span><h2>How this month compares</h2></div>
+        <b class="@(SpendDelta > 0 ? "trend-up" : "trend-down")">@(SpendDelta > 0 ? "▲" : "▼") @Math.Abs(SpendDelta).ToString("C") vs last month</b>
+    </div>
+    @if (!TopCategoriesThisMonth.Any())
+    {
+        <p class="muted">No spending logged yet this month.</p>
+    }
+    else
+    {
+        @foreach (var (category, amount) in TopCategoriesThisMonth)
+        {
+            <div class="category-pulse-row">
+                <span>@category</span>
+                <div class="progress"><i style="width:@(TxSpending <= 0 ? 0 : amount / TxSpending * 100)%"></i></div>
+                <b>@amount.ToString("C0")</b>
+            </div>
+        }
+    }
+</section>
+
+<section class="transaction-browser">
+    <div class="browser-heading"><div><span class="kicker">FLIP THROUGH THE RECORDS</span><h2>Transaction history</h2><p>Search the history or turn on review mode to surface things worth a second look.</p></div>
+        <div class="result-count"><strong>@FilteredCount.ToString("N0")</strong><small>matches</small></div>
+        <div class="view-toggle">
+            <button class="@(CompactView ? "active" : "")" title="Compact list" @onclick='() => CompactView = true'>☰</button>
+            <button class="@(!CompactView ? "active" : "")" title="Card gallery" @onclick='() => CompactView = false'>▦</button>
+        </div>
+    </div>
+
+    <div class="filter-panel panel">
+        <label class="search-filter"><span>⌕</span><input @bind="SearchQuery" @bind:event="oninput" placeholder="Search merchant, description, category…" /></label>
+        <label>When<select @bind="DateFilter"><option>This month</option><option>Last 90 days</option><option>This year</option><option>All history</option></select></label>
+        <label>Category<select @bind="CategoryFilter"><option>All categories</option>@foreach (var category in AvailableCategories) { <option>@category</option> }</select></label>
+        <label>Account<select @bind="AccountFilter"><option>All accounts</option>@foreach (var account in AvailableAccounts) { <option>@account</option> }</select></label>
+        <label>Flow<select @bind="TypeFilter"><option>Everything</option><option>Expenses</option><option>Income & refunds</option></select></label>
+        <label>Owner<select @bind="OwnerFilter"><option>Everyone</option><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+        <label>Sort<select @bind="SortFilter"><option>Newest first</option><option>Oldest first</option><option>Highest amount</option><option>Lowest amount</option></select></label>
+        <label class="review-toggle"><input type="checkbox" @bind="OnlyReview" /><span><strong>✦ Needs review</strong><small>Unusual, uncategorized, fees, and refunds</small></span></label>
+        <button class="text-button clear-filters" @onclick="ResetFilters">Clear filters</button>
+    </div>
+
+    @if (!VisibleTransactions.Any())
+    { <div class="empty-state"><span>⌕</span><h2>No matching transactions</h2><p>Try clearing a filter or widening the date range.</p></div> }
+    else if (CompactView)
+    {
+        <div class="transaction-list">
+        @foreach (var item in VisibleTransactions)
+        {
+            var reviewReason = ReviewReason(item);
+            <div class="transaction-row @(item.IsIncome ? "income-row" : "")">
+                <span class="tx-icon @CategoryClass(item.Category)">@CategoryIcon(item.Category, item.IsIncome)</span>
+                <div class="tx-info"><strong>@item.Description</strong><small>@item.Date.ToString("MMM d") · @item.Category · @item.Owner@if (reviewReason is not null) { <b class="review-sticker">@reviewReason</b> }</small></div>
+                <b class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</b>
+                <span class="row-actions"><button title="Edit transaction" class="icon-button" @onclick="() => EditTransaction(item)">✎</button><button title="Remove transaction" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></span>
+            </div>
+        }
+        </div>
+        @if (VisibleCount < FilteredCount) { <button class="button load-more" @onclick="() => VisibleCount += 60">Show 60 more</button> }
+    }
+    else
+    {
+        <div class="transaction-gallery">
+        @foreach (var item in VisibleTransactions)
+        {
+            var reviewReason = ReviewReason(item);
+            <article class="transaction-album @(item.IsIncome ? "income-album" : "")">
+                <div class="album-art @CategoryClass(item.Category)"><span>@CategoryIcon(item.Category, item.IsIncome)</span><small>@item.Date.ToString("MMM")</small><strong>@item.Date.Day</strong>@if (reviewReason is not null) { <b class="review-sticker">@reviewReason</b> }</div>
+                <div class="album-details"><span class="kicker">@item.Category</span><h3>@item.Description</h3><div class="album-meta"><span>@item.Owner</span>@if (!string.IsNullOrWhiteSpace(item.Account)) { <span>@item.Account</span> }</div><div class="album-footer"><strong class="@(item.IsIncome ? "positive" : "")">@(item.IsIncome ? "+" : "−")@item.Amount.ToString("C")</strong><span class="row-actions"><button title="Edit transaction" class="icon-button" @onclick="() => EditTransaction(item)">✎</button><button title="Remove transaction" class="delete-button" @onclick="() => DeleteTransaction(item)">×</button></span></div></div>
+            </article>
+        }
+        </div>
+        @if (VisibleCount < FilteredCount) { <button class="button load-more" @onclick="() => VisibleCount += 60">Show 60 more</button> }
+    }
+</section>
+
+<section class="panel automation-panel">
+    <div class="panel-head"><div><span class="kicker">RUNNING QUIETLY</span><h2>Monthly automations</h2></div><span class="auto-badge">✦ @Store.Data.RecurringTransactions.Count(x => x.IsActive) active</span></div>
+    @if (!Store.Data.RecurringTransactions.Any()) { <p class="muted">Mark a transaction “Repeat monthly” and it will show up here.</p> }
+    @foreach (var rule in Store.Data.RecurringTransactions)
+    { <div class="activity-row"><span class="category-icon">↻</span><div><strong>@rule.Description</strong><small>Posts on day @rule.DayOfMonth · @rule.Owner</small></div><b>@rule.Amount.ToString("C")</b></div> }
+</section>
+
+<section class="panel wish-preview">
+    <div><span class="kicker">PLAN IT, DON'T IMPULSE-BUY IT</span><h2>Shopping tracker</h2><p>Save tech, clothes, shoes, and home ideas—then see what fits the plan.</p></div>
+    <div class="wish-preview-total"><strong>@Store.Data.PurchaseIdeas.Sum(x => x.Price).ToString("C0")</strong><small>across @Store.Data.PurchaseIdeas.Count ideas</small></div>
+    <a class="button magic" href="shopping-tracker">Open shopping tracker →</a>
+</section>
+
+@code {
+    [Parameter] public bool ShowForm { get; set; }
+    [Parameter] public EventCallback<bool> ShowFormChanged { get; set; }
+    [Parameter] public EventCallback<Toast> Notify { get; set; }
+
+    bool _formWasOpen;
+
+    protected override void OnParametersSet()
+    {
+        // The parent's "+ Add transaction" button just flips ShowForm on; start from a
+        // blank draft when the form is opened externally rather than via an Edit click.
+        if (ShowForm && !_formWasOpen && EditingTxId is null)
+        {
+            TxDraft = new();
+            MakeRecurring = false;
+            RecurringDay = DateTime.Today.Day;
+        }
+        _formWasOpen = ShowForm;
+    }
+
+    protected override void OnInitialized()
+    {
+        CalculateReviewThreshold();
+        OwnerFilter = ActivePerson.Current == "Trey" ? "Me" : "Jess";
+        ActivePerson.Changed += OnActivePersonChanged;
+    }
+
+    void OnActivePersonChanged()
+    {
+        OwnerFilter = ActivePerson.Current == "Trey" ? "Me" : "Jess";
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => ActivePerson.Changed -= OnActivePersonChanged;
+
+    IEnumerable<Transaction> NeedsReview => Store.Data.Transactions.Where(x => x.NeedsReview).OrderByDescending(x => x.Date);
+
+    async Task ResolveReview(Transaction transaction)
+    {
+        await Store.MarkTransactionReviewedAsync(transaction.Id);
+        await Notify.InvokeAsync(new Toast("Marked reviewed."));
+    }
+
+    async Task LinkTransaction(Transaction transaction, object? value)
+    {
+        var text = value?.ToString();
+        if (string.IsNullOrWhiteSpace(text) || !Guid.TryParse(text, out var billId)) return;
+        await Store.LinkTransactionToBillAsync(transaction.Id, billId);
+        await Notify.InvokeAsync(new Toast("Linked transaction to bill."));
+    }
+
+    bool ShowRocketImport;
+    Transaction TxDraft = new();
+    bool MakeRecurring;
+    bool ReplaceTransactions = true, IsImporting;
+    string ImportOwner = "Me", ImportError = "";
+    RocketImportResult? RocketResult;
+    int RecurringDay = DateTime.Today.Day;
+    string OwnerFilter = "Everyone", SearchQuery = "", DateFilter = "This month", CategoryFilter = "All categories", AccountFilter = "All accounts", TypeFilter = "Everything", SortFilter = "Newest first";
+    bool OnlyReview;
+    int VisibleCount = 60;
+    bool CompactView = true;
+    decimal LargeExpenseThreshold = 500;
+    string[] Categories = ["Other", "Groceries", "Bills", "Dining", "Home", "Fun", "Transport", "Income"];
+    IEnumerable<Transaction> Month => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.Month && x.Date.Year == DateTime.Today.Year);
+    IEnumerable<string> AvailableCategories => Store.Data.Transactions.Select(x => x.Category).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<string> AvailableAccounts => Store.Data.Transactions.Select(x => x.Account).Where(x => !string.IsNullOrWhiteSpace(x)).Distinct().OrderBy(x => x);
+    IEnumerable<Transaction> FilteredTransactions
+    {
+        get
+        {
+            var today = DateTime.Today;
+            IEnumerable<Transaction> query = Store.Data.Transactions;
+            query = DateFilter switch
+            {
+                "This month" => query.Where(x => x.Date.Year == today.Year && x.Date.Month == today.Month),
+                "Last 90 days" => query.Where(x => x.Date >= today.AddDays(-90)),
+                "This year" => query.Where(x => x.Date.Year == today.Year),
+                _ => query
+            };
+            if (!string.IsNullOrWhiteSpace(SearchQuery)) query = query.Where(x => $"{x.Description} {x.Category} {x.Account} {x.Institution}".Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+            if (CategoryFilter != "All categories") query = query.Where(x => x.Category == CategoryFilter);
+            if (AccountFilter != "All accounts") query = query.Where(x => x.Account == AccountFilter);
+            if (OwnerFilter != "Everyone") query = query.Where(x => x.Owner == OwnerFilter);
+            if (TypeFilter == "Expenses") query = query.Where(x => !x.IsIncome);
+            if (TypeFilter == "Income & refunds") query = query.Where(x => x.IsIncome);
+            if (OnlyReview) query = query.Where(x => ReviewReason(x) is not null);
+            return SortFilter switch
+            {
+                "Oldest first" => query.OrderBy(x => x.Date),
+                "Highest amount" => query.OrderByDescending(x => x.Amount),
+                "Lowest amount" => query.OrderBy(x => x.Amount),
+                _ => query.OrderByDescending(x => x.Date).ThenByDescending(x => x.Amount)
+            };
+        }
+    }
+    int FilteredCount => FilteredTransactions.Count();
+    IEnumerable<Transaction> VisibleTransactions => FilteredTransactions.Take(VisibleCount);
+    decimal TxIncome => Month.Where(x => x.IsIncome).Sum(x => x.Amount);
+    decimal TxSpending => Month.Where(x => !x.IsIncome).Sum(x => x.Amount);
+    decimal TxShared => Month.Where(x => !x.IsIncome && x.Owner == "Shared").Sum(x => x.Amount);
+    IEnumerable<Transaction> LastMonth => Store.Data.Transactions.Where(x => x.Date.Month == DateTime.Today.AddMonths(-1).Month && x.Date.Year == DateTime.Today.AddMonths(-1).Year);
+    decimal LastMonthSpending => LastMonth.Where(x => !x.IsIncome).Sum(x => x.Amount);
+    decimal SpendDelta => TxSpending - LastMonthSpending;
+    IEnumerable<(string Category, decimal Amount)> TopCategoriesThisMonth => Month.Where(x => !x.IsIncome)
+        .GroupBy(x => x.Category).Select(g => (g.Key, g.Sum(x => x.Amount))).OrderByDescending(x => x.Item2).Take(4);
+    Guid? EditingTxId;
+
+    async Task CloseTxForm()
+    {
+        EditingTxId = null;
+        await ShowFormChanged.InvokeAsync(false);
+    }
+
+    void ClearTxForm() { var keepEditing = EditingTxId; TxDraft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; EditingTxId = keepEditing; }
+
+    async Task EditTransaction(Transaction item)
+    {
+        EditingTxId = item.Id;
+        TxDraft = new Transaction { Id = item.Id, Description = item.Description, Category = item.Category, Owner = item.Owner, Amount = item.Amount, IsIncome = item.IsIncome, Date = item.Date, Account = item.Account, Institution = item.Institution, Source = item.Source, SourceKey = item.SourceKey, RecurringRuleId = item.RecurringRuleId };
+        await ShowFormChanged.InvokeAsync(true);
+    }
+
+    async Task SaveTransaction()
+    {
+        string message;
+        if (EditingTxId is Guid id)
+        {
+            var existing = Store.Data.Transactions.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Description = TxDraft.Description; existing.Category = TxDraft.Category; existing.Owner = TxDraft.Owner;
+                existing.Amount = TxDraft.Amount; existing.IsIncome = TxDraft.IsIncome; existing.Date = TxDraft.Date;
+            }
+            message = $"Updated \"{TxDraft.Description}\".";
+        }
+        else
+        {
+            Store.Data.Transactions.Add(TxDraft);
+            if (MakeRecurring) Store.Data.RecurringTransactions.Add(new() { Description = TxDraft.Description, Category = TxDraft.Category, Owner = TxDraft.Owner, Amount = TxDraft.Amount, IsIncome = TxDraft.IsIncome, DayOfMonth = RecurringDay });
+            message = $"Added \"{TxDraft.Description}\" — {(TxDraft.IsIncome ? "+" : "-")}{TxDraft.Amount:C}.";
+        }
+        await Store.SaveAsync();
+        CalculateReviewThreshold();
+        TxDraft = new(); MakeRecurring = false; RecurringDay = DateTime.Today.Day; EditingTxId = null;
+        await ShowFormChanged.InvokeAsync(false);
+        await Notify.InvokeAsync(new Toast(message));
+    }
+
+    void CalculateReviewThreshold()
+    {
+        var values = Store.Data.Transactions.Where(x => !x.IsIncome).Select(x => x.Amount).OrderBy(x => x).ToList();
+        if (values.Count > 0) LargeExpenseThreshold = Math.Max(250, values[(int)Math.Floor((values.Count - 1) * .95)]);
+    }
+
+    string? ReviewReason(Transaction item)
+    {
+        if (item.Category.Equals("Uncategorized", StringComparison.OrdinalIgnoreCase)) return "Needs category";
+        if (item.Category.Equals("Fees", StringComparison.OrdinalIgnoreCase)) return "Fee spotted";
+        if (item.IsIncome && !item.Category.Equals("Income", StringComparison.OrdinalIgnoreCase)) return "Refund / credit";
+        if (!item.IsIncome && item.Amount >= LargeExpenseThreshold) return "Top 5% amount";
+        return null;
+    }
+
+    void ResetFilters() { SearchQuery = ""; DateFilter = "This month"; CategoryFilter = "All categories"; AccountFilter = "All accounts"; TypeFilter = "Everything"; OwnerFilter = "Everyone"; SortFilter = "Newest first"; OnlyReview = false; VisibleCount = 60; }
+    static string CategoryClass(string category) => $"cat-{new string(category.ToLowerInvariant().Where(char.IsLetterOrDigit).Take(12).ToArray())}";
+    static string CategoryIcon(string category, bool income) => income ? "↗" : category switch { "Groceries" => "🛒", "Dining & Drinks" => "☕", "Shopping" => "✦", "Bills & Utilities" => "⌁", "Software & Tech" => "⌘", "Auto & Transport" => "◆", "Entertainment & Rec." => "♪", "Fees" => "!", "Uncategorized" => "?", _ => "•" };
+
+    async Task DeleteTransaction(Transaction item)
+    {
+        var index = Store.Data.Transactions.IndexOf(item);
+        Store.Data.Transactions.Remove(item);
+        CalculateReviewThreshold();
+        await Store.SaveAsync();
+        await Notify.InvokeAsync(new Toast($"Removed \"{item.Description}\".", async () =>
+        {
+            Store.Data.Transactions.Insert(Math.Min(index, Store.Data.Transactions.Count), item);
+            CalculateReviewThreshold();
+            await Store.SaveAsync();
+        }));
+    }
+
+    async Task ImportRocket(InputFileChangeEventArgs args)
+    {
+        ImportError = ""; RocketResult = null; IsImporting = true;
+        try
+        {
+            if (!args.File.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) { ImportError = "Please choose the CSV exported by Rocket Money."; return; }
+            await using var upload = args.File.OpenReadStream(20 * 1024 * 1024);
+            using var buffered = new MemoryStream((int)args.File.Size);
+            await upload.CopyToAsync(buffered);
+            buffered.Position = 0;
+            RocketResult = await Store.ImportRocketCsvAsync(buffered, ImportOwner, ReplaceTransactions);
+            CalculateReviewThreshold();
+            if (RocketResult.Imported == 0) ImportError = "No new transactions were found in that export.";
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger("RocketMoneyImport").LogError(ex, "Rocket Money CSV import failed");
+            ImportError = $"Import failed ({ex.GetType().Name}): {ex.Message}";
+        }
+        finally { IsImporting = false; }
+    }
+}

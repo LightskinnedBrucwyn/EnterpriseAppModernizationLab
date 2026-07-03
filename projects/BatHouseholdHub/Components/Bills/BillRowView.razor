@@ -1,0 +1,89 @@
+@inject HouseholdStore Store
+
+<div class="bill-row @(Bill.EffectiveStatus(DateTime.Today) == BillStatus.Paid ? "bill-paid" : "")">
+    <span class="bill-dot @Bill.Category.CssClass()"></span>
+    <div class="bill-info">
+        <strong>@Bill.Name</strong>
+        <small>Due day @Bill.DueDay@(Bill.Frequency == BillFrequency.Monthly ? "" : $" · {Bill.Frequency.Label()}")@(Bill.AutoPay ? " · autopay" : "") · @Bill.Owner</small>
+        @if (Bill.ManualStatus == BillStatus.Delayed)
+        {
+            var linked = Bill.LinkedIncomeEventId is { } incId ? Store.Data.IncomeEvents.FirstOrDefault(x => x.Id == incId) : null;
+            <small class="muted">Waiting on @(linked?.Source ?? "an income event — choose one below")</small>
+        }
+        @if (!string.IsNullOrWhiteSpace(Bill.Notes))
+        { <small class="muted">@Bill.Notes</small> }
+    </div>
+    <span class="badge @Bill.EffectiveStatus(DateTime.Today).CssClass()">@Bill.EffectiveStatus(DateTime.Today).Label()</span>
+    <b>@Bill.Amount.ToString("C")</b>
+    <span class="row-actions">
+        @if (Bill.EffectiveStatus(DateTime.Today) == BillStatus.Paid)
+        { <button class="button magic small" @onclick="UnmarkPaid">Paid — undo</button> }
+        else
+        {
+            <select value="@Bill.ManualStatus" @onchange="e => SetStatus(e.Value)">
+                <option value="@BillStatus.Upcoming">Upcoming</option>
+                <option value="@BillStatus.Pending">Processing</option>
+                <option value="@BillStatus.Reserved">Set aside</option>
+                <option value="@BillStatus.Delayed">Waiting on income</option>
+                <option value="@BillStatus.Skipped">Skipped</option>
+            </select>
+            @if (Bill.ManualStatus == BillStatus.Delayed)
+            {
+                <select @onchange="e => LinkIncome(e.Value)">
+                    <option value="">Waiting on…</option>
+                    @foreach (var income in Store.Data.IncomeEvents.Where(x => x.Status != IncomeStatus.Received))
+                    { <option value="@income.Id" selected="@(Bill.LinkedIncomeEventId == income.Id)">@income.Source</option> }
+                </select>
+            }
+            <button class="button primary small" disabled="@(Bill.Amount <= 0)" @onclick="MarkPaid">Mark paid</button>
+        }
+        <button class="icon-button" title="Edit" @onclick="() => OnEdit.InvokeAsync(Bill)">✎</button>
+        <button class="icon-button" title="Remove" @onclick="Delete">×</button>
+    </span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Bill Bill { get; set; } = default!;
+    [Parameter] public EventCallback<Toast> Notify { get; set; }
+    [Parameter] public EventCallback<Bill> OnEdit { get; set; }
+
+    async Task MarkPaid()
+    {
+        await Store.MarkBillPaidAsync(Bill.Id);
+        await Notify.InvokeAsync(new Toast($"Marked \"{Bill.Name}\" paid — {Bill.Amount:C} logged to Money."));
+    }
+
+    async Task UnmarkPaid()
+    {
+        await Store.UnmarkBillPaidAsync(Bill.Id);
+        await Notify.InvokeAsync(new Toast($"Undid \"{Bill.Name}\"."));
+    }
+
+    async Task SetStatus(object? value)
+    {
+        var text = value?.ToString();
+        if (string.IsNullOrWhiteSpace(text) || !Enum.TryParse<BillStatus>(text, out var status)) return;
+        await Store.SetBillStatusAsync(Bill.Id, status, Bill.LinkedIncomeEventId);
+        await Notify.InvokeAsync(new Toast($"\"{Bill.Name}\" set to {status.Label()}."));
+    }
+
+    async Task LinkIncome(object? value)
+    {
+        var text = value?.ToString();
+        var incomeId = string.IsNullOrWhiteSpace(text) ? (Guid?)null : Guid.Parse(text);
+        await Store.SetBillStatusAsync(Bill.Id, BillStatus.Delayed, incomeId);
+        await Notify.InvokeAsync(new Toast($"\"{Bill.Name}\" is now waiting on income."));
+    }
+
+    async Task Delete()
+    {
+        Store.Data.Bills.Remove(Bill);
+        await Store.SaveAsync();
+        var removed = Bill;
+        await Notify.InvokeAsync(new Toast($"Removed \"{removed.Name}\".", async () =>
+        {
+            Store.Data.Bills.Add(removed);
+            await Store.SaveAsync();
+        }));
+    }
+}

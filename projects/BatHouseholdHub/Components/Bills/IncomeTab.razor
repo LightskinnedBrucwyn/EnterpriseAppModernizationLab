@@ -1,0 +1,64 @@
+@inject HouseholdStore Store
+
+<section class="panel">
+    <div class="panel-head"><div><span class="kicker">INCOME</span><h2>Income timeline</h2></div><button class="button magic small" @onclick="() => ShowIncomeForm = !ShowIncomeForm">＋ Add income</button></div>
+    @if (ShowIncomeForm)
+    {
+        <div class="form-grid">
+            <label>Source<input @bind="IncomeDraft.Source" placeholder="ByteForza paycheck" /></label>
+            <label>Owner<select @bind="IncomeDraft.Owner"><option>Trey</option><option>Jess</option><option>Shared</option></select></label>
+            <label>Net amount<input type="number" step=".01" @bind="IncomeDraft.NetAmount" /></label>
+            <label>Expected date<input type="date" @bind="IncomeDraft.ExpectedDate" /></label>
+            <label>Pay period start<input type="date" @bind="IncomeDraft.PayPeriodStart" /></label>
+            <label>Pay period end<input type="date" @bind="IncomeDraft.PayPeriodEnd" /></label>
+            <label>Status<select @bind="IncomeDraft.Status">
+                <option value="@IncomeStatus.Estimated">Estimated</option>
+                <option value="@IncomeStatus.Pending">Pending</option>
+                <option value="@IncomeStatus.Received">Received</option>
+            </select></label>
+        </div>
+        <div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(IncomeDraft.Source))" @onclick="SaveIncome">Save income</button><button class="text-button" @onclick="() => { ShowIncomeForm = false; IncomeDraft = new(); }">Cancel</button></div>
+    }
+    @if (!Store.Data.IncomeEvents.Any())
+    {
+        <p class="muted">No income logged yet.</p>
+    }
+    else
+    {
+        <div class="bill-list">
+            @foreach (var income in Store.Data.IncomeEvents.OrderBy(x => x.ExpectedDate))
+            {
+                var waitingCount = Store.Data.Bills.Count(x => x.IsActive && x.ManualStatus == BillStatus.Delayed && x.LinkedIncomeEventId == income.Id);
+                <div class="bill-row">
+                    <span class="bill-dot @(income.Status == IncomeStatus.Received ? "fixed" : "transfer")"></span>
+                    <div class="bill-info"><strong>@income.Source</strong><small>@income.Owner · @income.ExpectedDate.ToString("MMM d") · @income.Status @(waitingCount > 0 ? $"· {waitingCount} bill(s) waiting" : "")</small></div>
+                    <b>@income.NetAmount.ToString("C")</b>
+                    <span class="row-actions">
+                        @if (income.Status != IncomeStatus.Received)
+                        { <button class="button magic small" @onclick="() => MarkIncomeReceived(income)">Mark received</button> }
+                        <button class="icon-button" title="Remove" @onclick="() => DeleteIncome(income)">×</button>
+                    </span>
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public EventCallback<Toast> Notify { get; set; }
+
+    bool ShowIncomeForm;
+    IncomeEvent IncomeDraft = new();
+
+    async Task SaveIncome()
+    {
+        Store.Data.IncomeEvents.Add(IncomeDraft);
+        await Store.SaveAsync();
+        await Notify.InvokeAsync(new Toast($"Added income \"{IncomeDraft.Source}\"."));
+        IncomeDraft = new();
+        ShowIncomeForm = false;
+    }
+
+    async Task MarkIncomeReceived(IncomeEvent income) { income.Status = IncomeStatus.Received; await Store.SaveAsync(); }
+    async Task DeleteIncome(IncomeEvent income) { Store.Data.IncomeEvents.Remove(income); await Store.SaveAsync(); }
+}

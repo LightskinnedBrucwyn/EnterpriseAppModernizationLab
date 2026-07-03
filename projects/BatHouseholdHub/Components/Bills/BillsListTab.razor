@@ -1,0 +1,114 @@
+@inject HouseholdStore Store
+
+@if (ShowForm)
+{
+    <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
+        <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
+        <label>Amount<input type="number" step=".01" @bind="Draft.Amount" /></label>
+        <label>Due day of the month<input type="number" min="1" max="31" @bind="Draft.DueDay" /></label>
+        <label>How often<select @bind="Draft.Frequency">
+            <option value="@BillFrequency.Monthly">Monthly</option>
+            <option value="@BillFrequency.Weekly">Weekly</option>
+            <option value="@BillFrequency.Biweekly">Every 2 weeks</option>
+            <option value="@BillFrequency.Quarterly">Every 3 months</option>
+            <option value="@BillFrequency.Yearly">Yearly</option>
+        </select></label>
+        <label>Type<select @bind="Draft.Category">
+            <option value="@BillCategory.FixedBill">Regular bill</option>
+            <option value="@BillCategory.DebtPayment">Debt payment</option>
+            <option value="@BillCategory.TransferSavings">Transfer / savings</option>
+        </select></label>
+        <label>Whose bill<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
+        <label>Notes<input @bind="Draft.Notes" placeholder="Optional" /></label>
+        <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Pays itself (autopay)</label>
+    </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
+}
+
+<section class="panel">
+    <div class="panel-head"><div><span class="kicker">ALL BILLS</span><h2>Every bill</h2></div><b>@TotalMonthly.ToString("C")<small> / month</small></b></div>
+    @foreach (var group in Groups)
+    {
+        <div class="bill-group">
+            <div class="panel-head"><div><span class="kicker">@group.Category.Label().ToUpperInvariant()</span></div><b>@group.Total.ToString("C")</b></div>
+            @if (!group.Bills.Any())
+            {
+                <p class="muted">Nothing in this category yet.</p>
+            }
+            else
+            {
+                <div class="bill-list">
+                    @foreach (var bill in group.Bills)
+                    { <BillRowView Bill="bill" Notify="Notify" OnEdit="BeginEdit" /> }
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public bool ShowForm { get; set; }
+    [Parameter] public EventCallback<bool> ShowFormChanged { get; set; }
+    [Parameter] public EventCallback<Toast> Notify { get; set; }
+    /// <summary>Set by the parent when another tab (e.g. Overview) asks to edit a bill here.</summary>
+    [Parameter] public Bill? EditRequest { get; set; }
+    [Parameter] public EventCallback EditRequestHandled { get; set; }
+
+    Bill Draft = new();
+    Guid? EditingId;
+
+    record BillGroup(BillCategory Category, List<Bill> Bills, decimal Total);
+    IEnumerable<BillGroup> Groups => Enum.GetValues<BillCategory>()
+        .Select(c => new BillGroup(c, Store.Data.Bills.Where(x => x.IsActive && x.Category == c).OrderBy(x => x.DueDay).ToList(), Store.Data.Bills.Where(x => x.IsActive && x.Category == c).Sum(x => x.MonthlyEquivalent)));
+
+    decimal TotalMonthly => Store.Data.Bills.Where(x => x.IsActive).Sum(x => x.MonthlyEquivalent);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EditRequest is { } requested)
+        {
+            await EditRequestHandled.InvokeAsync();
+            await BeginEdit(requested);
+        }
+    }
+
+    async Task BeginEdit(Bill bill)
+    {
+        EditingId = bill.Id;
+        Draft = new()
+        {
+            Id = bill.Id, Name = bill.Name, Category = bill.Category, Amount = bill.Amount,
+            DueDay = bill.DueDay, AutoPay = bill.AutoPay, IsActive = bill.IsActive, LastPaidDate = bill.LastPaidDate,
+            Frequency = bill.Frequency, Owner = bill.Owner, Notes = bill.Notes
+        };
+        await ShowFormChanged.InvokeAsync(true);
+    }
+
+    async Task CloseForm()
+    {
+        EditingId = null;
+        Draft = new();
+        await ShowFormChanged.InvokeAsync(false);
+    }
+
+    async Task SaveBill()
+    {
+        if (EditingId is Guid id)
+        {
+            var existing = Store.Data.Bills.FirstOrDefault(x => x.Id == id);
+            if (existing is not null)
+            {
+                existing.Name = Draft.Name; existing.Category = Draft.Category; existing.Amount = Draft.Amount;
+                existing.DueDay = Draft.DueDay; existing.AutoPay = Draft.AutoPay;
+                existing.Frequency = Draft.Frequency; existing.Owner = Draft.Owner; existing.Notes = Draft.Notes;
+            }
+            await Notify.InvokeAsync(new Toast($"Updated \"{Draft.Name}\"."));
+        }
+        else
+        {
+            Store.Data.Bills.Add(Draft);
+            await Notify.InvokeAsync(new Toast($"Added \"{Draft.Name}\" — {Draft.Amount:C} {Draft.Frequency.Label()}."));
+        }
+        await Store.SaveAsync();
+        await CloseForm();
+    }
+}
