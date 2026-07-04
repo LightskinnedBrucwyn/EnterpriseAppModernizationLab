@@ -29,39 +29,48 @@ public class PlaidSyncRunner(PlaidClient client, IConfiguration config, Househol
     {
         var accountNames = await SyncBalancesAsync(item);
 
+        Transaction Map(Going.Plaid.Entity.Transaction t)
+        {
+            var amount = t.Amount ?? 0m;
+            return new Transaction
+            {
+                Date = (t.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue),
+                Description = t.MerchantName ?? "Bank transaction",
+                Category = t.PersonalFinanceCategory?.Primary ?? "Other",
+                Owner = item.Owner,
+                Amount = Math.Abs(amount),
+                IsIncome = amount < 0,
+                Account = t.AccountId is { } id && accountNames.TryGetValue(id, out var name) ? name : t.AccountId ?? "",
+                Institution = item.InstitutionName,
+                Source = "Plaid",
+                SourceKey = $"plaid:{t.TransactionId}",
+                MoneyType = amount < 0 ? MoneyType.Income : MoneyType.Expense
+            };
+        }
+
         string? cursor = item.SyncCursor;
-        var parsed = new List<Transaction>();
+        var added = new List<Transaction>();
+        var modified = new List<Transaction>();
+        var removedKeys = new List<string>();
         bool hasMore;
         do
         {
             var response = await client.TransactionsSyncAsync(new TransactionsSyncRequest { AccessToken = item.AccessToken, Cursor = cursor });
             if (response.Error is not null) throw new InvalidOperationException(response.Error.ErrorMessage);
 
-            foreach (var t in response.Added)
-            {
-                var amount = t.Amount ?? 0m;
-                parsed.Add(new Transaction
-                {
-                    Date = (t.Date ?? DateOnly.FromDateTime(DateTime.Today)).ToDateTime(TimeOnly.MinValue),
-                    Description = t.MerchantName ?? "Bank transaction",
-                    Category = t.PersonalFinanceCategory?.Primary ?? "Other",
-                    Owner = item.Owner,
-                    Amount = Math.Abs(amount),
-                    IsIncome = amount < 0,
-                    Account = t.AccountId is { } id && accountNames.TryGetValue(id, out var name) ? name : t.AccountId ?? "",
-                    Institution = item.InstitutionName,
-                    Source = "Plaid",
-                    SourceKey = $"plaid:{t.TransactionId}",
-                    MoneyType = amount < 0 ? MoneyType.Income : MoneyType.Expense
-                });
-            }
+            // A pending charge that later settles arrives as Modified (new amount/merchant);
+            // a dropped pending charge arrives as Removed. Applying only Added would leave
+            // stale or duplicate rows once the cursor moved past those events.
+            added.AddRange(response.Added.Select(Map));
+            modified.AddRange(response.Modified.Select(Map));
+            removedKeys.AddRange(response.Removed.Select(r => $"plaid:{r.TransactionId}"));
 
             cursor = response.NextCursor;
             hasMore = response.HasMore;
         }
         while (hasMore);
 
-        if (parsed.Count > 0) await store.ImportPlaidTransactionsAsync(parsed);
+        await store.ApplyPlaidSyncAsync(added, modified, removedKeys);
         await store.SetPlaidSyncCursorAsync(item.Id, cursor);
     }
 

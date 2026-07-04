@@ -251,6 +251,34 @@ public class HouseholdStore
         return newlyImported.Count;
     }
 
+    /// <summary>Applies a full incremental Plaid sync: removes dropped transactions, updates
+    /// settled/changed ones in place (both keyed by SourceKey), and imports genuinely new ones
+    /// through the same dedup + bill reconciliation the CSV path uses.</summary>
+    public async Task ApplyPlaidSyncAsync(List<Transaction> added, List<Transaction> modified, List<string> removedKeys)
+    {
+        if (removedKeys.Count > 0)
+        {
+            var drop = removedKeys.ToHashSet();
+            Data.Transactions.RemoveAll(x => drop.Contains(x.SourceKey));
+        }
+
+        foreach (var change in modified)
+        {
+            var existing = Data.Transactions.FirstOrDefault(x => x.SourceKey == change.SourceKey);
+            if (existing is null) { added.Add(change); continue; }
+            existing.Date = change.Date;
+            existing.Description = change.Description;
+            existing.Category = change.Category;
+            existing.Amount = change.Amount;
+            existing.IsIncome = change.IsIncome;
+            existing.Account = change.Account;
+            existing.MoneyType = change.MoneyType;
+        }
+
+        if (added.Count > 0) await ImportPlaidTransactionsAsync(added);
+        else await SaveAsync();
+    }
+
     public async Task SetPlaidSyncCursorAsync(Guid itemId, string? cursor)
     {
         var item = Data.PlaidItems.FirstOrDefault(x => x.Id == itemId);
@@ -484,8 +512,16 @@ public class HouseholdStore
         var bill = Data.Bills.FirstOrDefault(x => x.Id == id);
         if (bill is null) return;
         var today = DateTime.Today;
-        var alreadyPosted = Data.Transactions.Any(x => x.Source == "Bill payment" && x.Description == bill.Name
-            && x.Date.Year == today.Year && x.Date.Month == today.Month);
+        // Scope the "already logged this cycle?" check to the bill's actual cadence, not the
+        // calendar month — otherwise a biweekly bill's second payment in a month silently skips
+        // its expense log and Money totals undercount.
+        var cycleStart = bill.Frequency switch
+        {
+            BillFrequency.Weekly => today.AddDays(-6),
+            BillFrequency.Biweekly => today.AddDays(-13),
+            _ => new DateTime(today.Year, today.Month, 1)
+        };
+        var alreadyPosted = Data.Transactions.Any(x => x.Source == "Bill payment" && x.Description == bill.Name && x.Date >= cycleStart);
         bill.LastPaidDate = today;
         bill.ManualStatus = BillStatus.Upcoming;
         if (bill.Amount > 0 && !alreadyPosted)

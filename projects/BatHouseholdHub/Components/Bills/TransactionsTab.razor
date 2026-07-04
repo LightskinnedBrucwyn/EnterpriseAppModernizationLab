@@ -285,7 +285,15 @@
             if (!string.IsNullOrWhiteSpace(SearchQuery)) query = query.Where(x => $"{x.Description} {x.Category} {x.Account} {x.Institution}".Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
             if (CategoryFilter != "All categories") query = query.Where(x => x.Category == CategoryFilter);
             if (AccountFilter != "All accounts") query = query.Where(x => x.Account == AccountFilter);
-            if (OwnerFilter != "Everyone") query = query.Where(x => x.Owner == OwnerFilter);
+            // Owners arrive as "Me"/"Trey" (CSV vs Plaid) and "Jess"; normalize both sides so
+            // Trey's bank-synced rows aren't hidden by the "Me" filter.
+            query = OwnerFilter switch
+            {
+                "Me" => query.Where(x => OwnerPerson(x.Owner) == "Trey"),
+                "Jess" => query.Where(x => OwnerPerson(x.Owner) == "Jess"),
+                "Shared" => query.Where(x => OwnerPerson(x.Owner) is null),
+                _ => query
+            };
             if (TypeFilter == "Expenses") query = query.Where(x => !x.IsIncome);
             if (TypeFilter == "Income & refunds") query = query.Where(x => x.IsIncome);
             if (OnlyReview) query = query.Where(x => ReviewReason(x) is not null);
