@@ -3,8 +3,12 @@ services:
     build: .
     container_name: bat-household-hub
     restart: unless-stopped
+    # Bind to the host loopback only. `tailscale serve` reaches the app via 127.0.0.1:5188
+    # and terminates HTTPS at letsgetrichbabe.<tailnet>.ts.net; no other device can hit the
+    # insecure http://batserver:5188 URL because the port isn't published on any external
+    # interface. The deploy healthcheck also curls 127.0.0.1, so it's unaffected.
     ports:
-      - "5188:8080"
+      - "127.0.0.1:5188:8080"
     volumes:
       - ./data:/app/App_Data
     environment:
