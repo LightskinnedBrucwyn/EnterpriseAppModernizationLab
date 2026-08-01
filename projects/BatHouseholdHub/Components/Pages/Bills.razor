@@ -14,8 +14,8 @@
 <section class="panel funds-panel">
     <div class="panel-head"><div><span class="kicker">AVAILABLE FUNDS</span><h2>What we have right now</h2></div><b>@Store.Data.Funds.Total.ToString("C")</b></div>
     <div class="form-grid">
-        <label>Trey<input type="number" step=".01" @bind="FundsDraft.Trey" /></label>
-        <label>Jess<input type="number" step=".01" @bind="FundsDraft.Jess" /></label>
+        <label>Person A<input type="number" step=".01" @bind="FundsDraft.PersonA" /></label>
+        <label>Person B<input type="number" step=".01" @bind="FundsDraft.PersonB" /></label>
         <label>Shared<input type="number" step=".01" @bind="FundsDraft.Shared" /></label>
         <label>Buffer to keep aside<input type="number" step=".01" @bind="FundsDraft.Buffer" /></label>
     </div>
@@ -55,7 +55,7 @@
 @if (ShowForm)
 {
     <section class="panel form-panel"><div class="panel-head"><h2>@(EditingId is null ? "Add a bill" : "Edit bill")</h2><button class="icon-button" @onclick="CloseForm">×</button></div><div class="form-grid">
-        <label>Bill name<input @bind="Draft.Name" placeholder="Chase autopay, Verizon, SoFi transfer…" /></label>
+        <label>Bill name<input @bind="Draft.Name" placeholder="Example utility, example loan, rent reserve…" /></label>
         <label>Category<select @bind="Draft.Category">
             <option value="@BillCategory.DebtPayment">Debt Payment</option>
             <option value="@BillCategory.FixedBill">Fixed Bill</option>
@@ -101,7 +101,7 @@
                 { <option value="@income.Id" selected="@(Draft.LinkedIncomeEventId == income.Id)">@income.Source</option> }
             </select></label>
         }
-        <label>Owner<select @bind="Draft.Owner"><option>Shared</option><option>Trey</option><option>Jess</option></select></label>
+        <label>Owner<select @bind="Draft.Owner"><option>Shared</option><option>Person A</option><option>Person B</option></select></label>
         <label>Notes<input @bind="Draft.Notes" placeholder="Optional" /></label>
         <label class="check-label"><input type="checkbox" @bind="Draft.AutoPay" /> Autopay</label>
     </div><div class="form-actions"><button class="button primary" disabled="@(string.IsNullOrWhiteSpace(Draft.Name))" @onclick="SaveBill">@(EditingId is null ? "Save bill" : "Update bill")</button><button class="text-button" @onclick="CloseForm">Cancel</button></div></section>
@@ -202,8 +202,8 @@
     @if (ShowIncomeForm)
     {
         <div class="form-grid">
-            <label>Source<input @bind="IncomeDraft.Source" placeholder="ByteForza paycheck" /></label>
-            <label>Owner<select @bind="IncomeDraft.Owner"><option>Trey</option><option>Jess</option><option>Shared</option></select></label>
+            <label>Source<input @bind="IncomeDraft.Source" placeholder="Example paycheck" /></label>
+            <label>Owner<select @bind="IncomeDraft.Owner"><option>Person A</option><option>Person B</option><option>Shared</option></select></label>
             <label>Net amount<input type="number" step=".01" @bind="IncomeDraft.NetAmount" /></label>
             <label>Expected date<input type="date" @bind="IncomeDraft.ExpectedDate" /></label>
             <label>Pay period start<input type="date" @bind="IncomeDraft.PayPeriodStart" /></label>
@@ -366,7 +366,7 @@
 
     protected override void OnInitialized() => FundsDraft = new()
     {
-        Trey = Store.Data.Funds.Trey, Jess = Store.Data.Funds.Jess,
+        PersonA = Store.Data.Funds.PersonA, PersonB = Store.Data.Funds.PersonB,
         Shared = Store.Data.Funds.Shared, Buffer = Store.Data.Funds.Buffer
     };
 
@@ -388,8 +388,8 @@
 
     async Task SaveFunds()
     {
-        Store.Data.Funds.Trey = FundsDraft.Trey;
-        Store.Data.Funds.Jess = FundsDraft.Jess;
+        Store.Data.Funds.PersonA = FundsDraft.PersonA;
+        Store.Data.Funds.PersonB = FundsDraft.PersonB;
         Store.Data.Funds.Shared = FundsDraft.Shared;
         Store.Data.Funds.Buffer = FundsDraft.Buffer;
         Store.Data.Funds.LastUpdated = DateTime.Today;
