@@ -6,7 +6,7 @@ Goal: prepare BatHouseholdHub to become a secure, mostly autonomous household fi
 
 ## Phase 0. Security and Repository Hygiene
 
-Objective: make the current app safe enough to keep private finance data on BatServer while development continues in GitHub.
+Objective: make the current app safe enough to keep private finance data on BatServer while development continues in a public GitHub repository.
 
 Work:
 
@@ -16,13 +16,13 @@ Work:
 - Protect `/uploads/{id}` behind authorization and consider short-lived download links.
 - Document the BatServer data directory, backup scope, restore process, and secret-source expectations.
 - Add security headers/reverse-proxy guidance for HTTPS on the tailnet.
-- Add a private-data redaction checklist for PRs and AI prompts.
+- Add a private-data redaction checklist for public-repository PRs and AI prompts.
 - Add a first audit log design for imports, edits, deletions, generated briefs, and approval actions.
 
 Exit criteria:
 
 - No real financial records are required in source code.
-- Private runtime data is clearly excluded from GitHub.
+- Private runtime data is clearly excluded from the public GitHub repository.
 - Uploads and finance pages have an authentication plan before more automation lands.
 - Backup and restore expectations are documented.
 
@@ -166,7 +166,7 @@ Exit criteria:
 
 ## Cross-Phase Principles
 
-- GitHub holds code, docs, and synthetic examples only.
+- Public GitHub holds code, docs, and synthetic examples only.
 - BatServer holds private data, uploads, imports, backups, approvals, and audit logs.
 - Automation recommends before it acts.
 - Every import and agent-generated recommendation is reviewable.

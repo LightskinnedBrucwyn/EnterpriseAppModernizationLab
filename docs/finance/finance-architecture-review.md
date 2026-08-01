@@ -6,7 +6,7 @@ Scope: `projects/BatHouseholdHub` only. This review is documentation and plannin
 
 ## Current Architecture
 
-BatHouseholdHub is a private Blazor Server household dashboard targeting .NET 8. The application is organized as a single web project:
+BatHouseholdHub is a Blazor Server household dashboard targeting .NET 8. It is intended for private runtime deployment on BatServer over LAN/Tailscale only, while this GitHub repository is public and must contain code, documentation, and synthetic examples only. The application is organized as a single web project:
 
 - UI: Razor components in `projects/BatHouseholdHub/Components`.
 - Domain models: `projects/BatHouseholdHub/Models/HouseholdData.cs`.
@@ -206,7 +206,7 @@ Fields likely needed: `BriefType`, `GeneratedAt`, `PeriodStart`, `PeriodEnd`, `S
 
 ## Recommended Phased Architecture
 
-Phase 0 should focus on security and repository hygiene before adding autonomy. Remove household-specific seed facts from source code, document private-data handling, add authentication for BatServer access, and ensure `.gitignore` covers all private runtime data.
+Phase 0 should focus on security and public-repository hygiene before adding autonomy. Remove household-specific seed facts from source code, document private-data handling, add authentication for BatServer access, and ensure `.gitignore` covers all private runtime data.
 
 Phase 1 should introduce finance-focused model boundaries while preserving existing JSON data. Add schema versioning, migration helpers, import-batch records, and dedicated services for accounts, transactions, recurring bills, paychecks, goals, and audit events. If JSON remains temporarily, separate public app configuration from private finance data.
 

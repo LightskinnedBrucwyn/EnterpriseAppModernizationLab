@@ -2,11 +2,19 @@
 
 Date: 2026-08-01
 
-This boundary is the rulebook for turning BatHouseholdHub into a household finance command center without leaking private financial data into GitHub, logs, prompts, screenshots, or pull requests.
+This boundary is the rulebook for turning BatHouseholdHub into a household finance command center without leaking private financial data into the public GitHub repository, logs, prompts, screenshots, or pull requests.
 
-## Belongs in GitHub
+## Visibility and Runtime Boundary
 
-GitHub may contain:
+Repository visibility: public.
+
+Runtime deployment: private, LAN/Tailscale only.
+
+The repository must be treated as public even when the app itself is designed for private household use. BatHouseholdHub source control can contain implementation plans, synthetic examples, and documentation; BatServer is the private boundary for real household finance data, uploaded files, imports, approvals, backups, and audit logs.
+
+## Belongs in Public GitHub
+
+The public GitHub repository may contain:
 
 - Application source code.
 - Documentation.
@@ -14,12 +22,12 @@ GitHub may contain:
 - Empty folders represented by placeholder files when needed.
 - Sanitized test fixtures with fake names, fake accounts, fake merchants, fake institutions, fake dates, and fake amounts.
 - Configuration templates that show variable names without values.
-- Docker, build, and deployment instructions that do not include private host credentials or secrets.
+- Docker, build, and deployment instructions that do not include private host credentials, private network details beyond intentional LAN/Tailscale guidance, or secrets.
 - Migration code and test cases using synthetic data.
 
 Synthetic examples must be obvious fakes. Good examples: `Example Checking`, `Demo Credit Union`, `Coffee Shop 123`, `1111`, `$42.00`, `2026-01-15`.
 
-## Belongs Only on BatServer
+## Belongs Only on Private BatServer
 
 The following must stay only on BatServer or other approved private backup storage:
 
