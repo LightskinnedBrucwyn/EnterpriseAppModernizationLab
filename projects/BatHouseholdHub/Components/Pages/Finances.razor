@@ -8,7 +8,7 @@
 <section class="panel rocket-import">
     <div class="rocket-copy"><span class="rocket-mark">🚀</span><div><span class="kicker">ROCKET MONEY IMPORT</span><h2>Update from your real accounts</h2><p>Transfers, card payments, savings moves, and investments are excluded so they aren’t counted twice.</p></div></div>
     <div class="import-controls">
-        <label>Assign this export to<select @bind="ImportOwner"><option>Me</option><option>Jess</option><option>Shared</option></select></label>
+        <label>Assign this export to<select @bind="ImportOwner"><option>Person A</option><option>Person B</option><option>Shared</option></select></label>
         <label class="check-label"><input type="checkbox" @bind="ReplaceTransactions" /> Replace current transactions</label>
         <label class="button magic upload-button">@(IsImporting ? "Importing…" : "Choose Rocket CSV")<InputFile OnChange="ImportRocket" accept=".csv,text/csv" disabled="@IsImporting" /></label>
     </div>
@@ -33,7 +33,7 @@
             <label>Description<input @bind="Draft.Description" placeholder="Coffee, rent, paycheck…" /></label>
             <label>Amount<input type="number" step="0.01" @bind="Draft.Amount" /></label>
             <label>Category<select @bind="Draft.Category">@foreach (var c in Categories) { <option>@c</option> }</select></label>
-            <label>Who?<select @bind="Draft.Owner"><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+            <label>Who?<select @bind="Draft.Owner"><option>Shared</option><option>Person A</option><option>Person B</option></select></label>
             <label>Date<input type="date" @bind="Draft.Date" /></label>
             <label class="check-label"><input type="checkbox" @bind="Draft.IsIncome" /> This is income</label>
             @if (EditingId is null)
@@ -65,7 +65,7 @@
         <label>Category<select @bind="CategoryFilter"><option>All categories</option>@foreach (var category in AvailableCategories) { <option>@category</option> }</select></label>
         <label>Account<select @bind="AccountFilter"><option>All accounts</option>@foreach (var account in AvailableAccounts) { <option>@account</option> }</select></label>
         <label>Flow<select @bind="TypeFilter"><option>Everything</option><option>Expenses</option><option>Income & refunds</option></select></label>
-        <label>Owner<select @bind="OwnerFilter"><option>Everyone</option><option>Shared</option><option>Me</option><option>Jess</option></select></label>
+        <label>Owner<select @bind="OwnerFilter"><option>Everyone</option><option>Shared</option><option>Person A</option><option>Person B</option></select></label>
         <label>Sort<select @bind="SortFilter"><option>Newest first</option><option>Oldest first</option><option>Highest amount</option><option>Lowest amount</option></select></label>
         <label class="review-toggle"><input type="checkbox" @bind="OnlyReview" /><span><strong>✦ Needs review</strong><small>Unusual, uncategorized, fees, and refunds</small></span></label>
         <button class="text-button clear-filters" @onclick="ResetFilters">Clear filters</button>
@@ -107,7 +107,7 @@
     bool ShowForm;
     bool MakeRecurring;
     bool ReplaceTransactions = true, IsImporting;
-    string ImportOwner = "Me", ImportError = "";
+    string ImportOwner = "Person A", ImportError = "";
     RocketImportResult? RocketResult;
     int RecurringDay = DateTime.Today.Day;
     string OwnerFilter = "Everyone", SearchQuery = "", DateFilter = "This month", CategoryFilter = "All categories", AccountFilter = "All accounts", TypeFilter = "Everything", SortFilter = "Newest first";
