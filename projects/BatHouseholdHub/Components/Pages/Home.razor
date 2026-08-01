@@ -26,7 +26,7 @@
 
 <section class="hero">
     <div class="hero-blob" aria-hidden="true"></div>
-    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1 class="hashtag-hero">#GoodJobTreyAndJess</h1><p>Here’s the gentle little snapshot of home today.</p></div>
+    <div><span class="kicker">@DateTime.Today.ToString("dddd, MMMM d")</span><h1 class="hashtag-hero">#GoodJobHousehold</h1><p>Here’s the gentle little snapshot of home today.</p></div>
     <div class="hero-side">
         <button class="button magic" @onclick="() => ShowPaycheckForm = !ShowPaycheckForm">💰 Log paycheck</button>
         <a class="button primary" href="finances#add">＋ Add transaction</a>
@@ -44,7 +44,7 @@
     <section class="panel form-panel paycheck-panel">
         <div class="panel-head"><h2>Log a paycheck</h2><button class="icon-button" @onclick="() => ShowPaycheckForm = false">×</button></div>
         <div class="form-grid">
-            <label>Whose paycheck?<select @bind="PaycheckOwner"><option>Me</option><option>Jess</option></select></label>
+            <label>Whose paycheck?<select @bind="PaycheckOwner"><option>Person A</option><option>Person B</option></select></label>
             <label>Amount<input type="number" step=".01" @bind="PaycheckAmount" /></label>
             <label>Date<input type="date" @bind="PaycheckDate" /></label>
         </div>
@@ -56,12 +56,12 @@
 }
 
 <details class="jess-surprise">
-    <summary><span class="love-heart">♥</span><div><small>HEY JESS…</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
-    <div class="love-reveal"><img src="images/jess-love-note.png" alt="Two cozy bats cuddling beneath the moon with a love note for Jess" /><p>Built into our little home, just like you are. ♥</p></div>
+    <summary><span class="love-heart">♥</span><div><small>HOUSEHOLD NOTE</small><strong>You have a tiny surprise</strong></div><span class="open-hint">open me ✦</span></summary>
+    <div class="love-reveal"><p>Built into our little home, just like you are. ♥</p></div>
 </details>
 
 <section class="panel">
-    <div class="panel-head"><div><span class="kicker">JESS'S FAVE SHOPPING</span><h2>Quick shopping tabs</h2><p class="muted">One click to her go-to stores — opens in a new tab.</p></div><button class="icon-button" title="Add a site" @onclick="() => ShowSiteForm = !ShowSiteForm">＋</button></div>
+    <div class="panel-head"><div><span class="kicker">HOUSEHOLD SHOPPING</span><h2>Quick shopping tabs</h2><p class="muted">One click to favorite stores — opens in a new tab.</p></div><button class="icon-button" title="Add a site" @onclick="() => ShowSiteForm = !ShowSiteForm">＋</button></div>
     <div class="site-tabs">
         @foreach (var site in Store.Data.ShoppingSites)
         {
@@ -73,7 +73,7 @@
         <div class="form-grid">
             <label>Site name<input @bind="NewSiteName" placeholder="e.g. Nordstrom" /></label>
             <label class="wide">Link<input @bind="NewSiteUrl" placeholder="https://…" /></label>
-            <label>For whom?<select @bind="NewSiteOwner"><option>Jess</option><option>Me</option><option>Shared</option></select></label>
+            <label>For whom?<select @bind="NewSiteOwner"><option>Person B</option><option>Person A</option><option>Shared</option></select></label>
         </div>
         <div class="form-actions">
             <button class="button primary" disabled="@(string.IsNullOrWhiteSpace(NewSiteName) || !IsWebUrl(NewSiteUrl))" @onclick="AddSite">Add tab</button>
@@ -131,7 +131,7 @@
             <div class="goal-amount"><strong>@Goal.Current.ToString("C0")</strong><span>of @Goal.Target.ToString("C0")</span></div>
             <div class="progress"><i style="width:@GoalPercent%"></i></div>
             <p>@GoalPercent% there. Every bit counts.</p>
-            <div class="hashtag-row"><span>#GOODJOBJESS</span><span>#LOVEYOUBABE</span><span>#BIG99K</span></div>
+            <div class="hashtag-row"><span>#GOODJOBHOUSEHOLD</span><span>#SYNTHETICDEMO</span><span>#PRIVATEBYDEFAULT</span></div>
         }
     </div>
 </section>
@@ -174,14 +174,14 @@
     string TonightMeal => Store.Data.MealPlans.FirstOrDefault(x => x.Date.Date == DateTime.Today)?.Meal ?? "Pick something cozy";
 
     bool ShowSiteForm;
-    string NewSiteName = "", NewSiteUrl = "", NewSiteOwner = "Jess";
+    string NewSiteName = "", NewSiteUrl = "", NewSiteOwner = "Person B";
     string ShopSearch = "";
     string ShopSearchUrl => $"https://www.google.com/search?tbm=shop&q={Uri.EscapeDataString(string.IsNullOrWhiteSpace(ShopSearch) ? "shopping" : ShopSearch)}";
     static bool IsWebUrl(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     async Task AddSite()
     {
         await Store.AddShoppingSiteAsync(NewSiteName, NewSiteUrl, NewSiteOwner);
-        NewSiteName = ""; NewSiteUrl = ""; NewSiteOwner = "Jess";
+        NewSiteName = ""; NewSiteUrl = ""; NewSiteOwner = "Person B";
         ShowSiteForm = false;
     }
     async Task DeleteSite(Guid id) => await Store.DeleteShoppingSiteAsync(id);
@@ -215,7 +215,7 @@
     async Task DeleteUpload(Guid id) => await Store.DeleteUploadAsync(id);
 
     bool ShowPaycheckForm;
-    string PaycheckOwner = "Me";
+    string PaycheckOwner = "Person A";
     decimal PaycheckAmount;
     DateTime PaycheckDate = DateTime.Today;
     string StatusMessage = "";
