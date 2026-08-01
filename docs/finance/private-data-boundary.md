@@ -24,6 +24,7 @@ The public GitHub repository may contain:
 - Configuration templates that show variable names without values.
 - Docker, build, and deployment instructions that do not include private host credentials, private network details beyond intentional LAN/Tailscale guidance, or secrets.
 - Migration code and test cases using synthetic data.
+- Repository hygiene scripts that scan staged or tracked files for prohibited finance files and likely secrets.
 
 Synthetic examples must be obvious fakes. Good examples: `Example Checking`, `Demo Credit Union`, `Coffee Shop 123`, `1111`, `$42.00`, `2026-01-15`.
 
@@ -65,6 +66,8 @@ Date,Name,Category,Amount,Account Name,Account Number,Institution Name
 2026-01-20,Example Paycheck,Income,-1200.00,Example Checking,1111,Demo Bank
 ```
 
+See `docs/finance/synthetic-fixtures.md` for fixture naming and example rules.
+
 ## Secret Handling
 
 Secrets must be supplied through BatServer environment variables, local secret stores, or future secret-management tooling. They must not be committed to GitHub or written into docs with real values.
@@ -84,6 +87,7 @@ Required practices:
 
 - Keep only placeholder names in `compose.yaml`, `.env.example`, or docs.
 - Keep real `.env` files untracked.
+- Run `scripts/check-repository-hygiene.sh --staged` before committing finance-related work.
 - Rotate a secret immediately if it is pasted into GitHub, logs, chat, or a PR.
 - Do not include secrets in AI prompts.
 - Log only whether a provider is configured, never the value.
