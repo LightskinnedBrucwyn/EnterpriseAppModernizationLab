@@ -107,7 +107,7 @@ public class Bill
     public BillStatus ManualStatus { get; set; } = BillStatus.Upcoming;
     public MoneyType MoneyType { get; set; } = MoneyType.Expense;
     /// <summary>When ManualStatus is Delayed, the bill waits on this income event instead of
-    /// a due date — e.g. "Pay Ahmad $600 after Vista final check arrives."</summary>
+    /// a due date.</summary>
     public Guid? LinkedIncomeEventId { get; set; }
 
     public bool IsPaidThisCycle(DateTime asOf) => LastPaidDate is { } d && d.Year == asOf.Year && d.Month == asOf.Month;
@@ -143,12 +143,12 @@ public class IncomeEvent
 
 public class HouseholdFunds
 {
-    public decimal Trey { get; set; }
-    public decimal Jess { get; set; }
+    public decimal PersonA { get; set; }
+    public decimal PersonB { get; set; }
     public decimal Shared { get; set; }
     public decimal Buffer { get; set; }
     public DateTime LastUpdated { get; set; } = DateTime.Today;
-    public decimal Total => Trey + Jess + Shared;
+    public decimal Total => PersonA + PersonB + Shared;
 }
 
 public class Recipe
@@ -211,7 +211,7 @@ public class ShoppingSite
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
     public string Url { get; set; } = "";
-    public string Owner { get; set; } = "Jess";
+    public string Owner { get; set; } = "Person B";
 }
 
 public static class BillCategoryExtensions
