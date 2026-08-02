@@ -20,6 +20,7 @@ BatHouseholdHub fixtures, examples, tests, screenshots, and documentation must b
 - Rocket Money exports, bank CSV files, statements, paystubs, credit reports, PDFs, Excel workbooks, screenshots, database files, backups, and runtime JSON.
 - Private LAN hostnames, private IP addresses, usernames, domains, credentials, tokens, API keys, or data-protection keys.
 - AI prompts or responses that include private finance facts.
+- Runtime JSON, migration backups, restore snapshots, or backup excerpts, even when the file was created automatically.
 
 ## Fixture Pattern
 

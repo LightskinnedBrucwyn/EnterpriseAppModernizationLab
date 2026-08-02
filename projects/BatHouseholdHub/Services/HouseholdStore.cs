@@ -13,6 +13,9 @@ public class HouseholdStore
     private readonly string _uploadsFolder;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private readonly ILogger<HouseholdStore> _logger;
+    private bool _legacyFundsMigrationDetected;
+    private bool _legacyFundsMigrationBackedUp;
+    private bool _legacyFundsMigrationSaved;
     public HouseholdData Data { get; private set; }
 
     public HouseholdStore(IWebHostEnvironment environment, ILogger<HouseholdStore> logger)
@@ -33,8 +36,8 @@ public class HouseholdStore
             changed |= LinkSyntheticDelayedBillsToIncome();
         }
         changed |= ProcessRecurringTransactions();
-        if (changed)
-            File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
+        if (changed || _legacyFundsMigrationDetected)
+            SaveDataWithMigrationProtection();
     }
 
     private HouseholdData Load()
@@ -42,7 +45,13 @@ public class HouseholdStore
         if (!File.Exists(_path)) return Seed();
         try
         {
-            return JsonSerializer.Deserialize<HouseholdData>(File.ReadAllText(_path)) ?? Seed();
+            var data = JsonSerializer.Deserialize<HouseholdData>(File.ReadAllText(_path)) ?? Seed();
+            if (data.Funds.MigratedLegacyMemberFunds)
+            {
+                _legacyFundsMigrationDetected = true;
+                _logger.LogInformation("household.json schema migration detected for household funds.");
+            }
+            return data;
         }
         catch (JsonException ex)
         {
@@ -91,10 +100,43 @@ public class HouseholdStore
         await _lock.WaitAsync();
         try
         {
+            EnsureMigrationBackupIfNeeded();
             var json = JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(_path, json);
+            LogMigrationSavedIfNeeded();
         }
         finally { _lock.Release(); }
+    }
+
+    private void SaveDataWithMigrationProtection()
+    {
+        EnsureMigrationBackupIfNeeded();
+        File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
+        LogMigrationSavedIfNeeded();
+    }
+
+    private void EnsureMigrationBackupIfNeeded()
+    {
+        if (!_legacyFundsMigrationDetected || _legacyFundsMigrationBackedUp) return;
+        try
+        {
+            var backupPath = $"{_path}.migration-{DateTime.Now:yyyyMMddHHmmss}.json.bak";
+            File.Copy(_path, backupPath, overwrite: false);
+            _legacyFundsMigrationBackedUp = true;
+            _logger.LogInformation("Private runtime backup created before household.json schema migration.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "household.json schema migration failed before save because a private runtime backup could not be created.");
+            throw;
+        }
+    }
+
+    private void LogMigrationSavedIfNeeded()
+    {
+        if (!_legacyFundsMigrationDetected || _legacyFundsMigrationSaved) return;
+        _legacyFundsMigrationSaved = true;
+        _logger.LogInformation("household.json schema migration completed successfully.");
     }
 
     public async Task<RocketImportResult> ImportRocketCsvAsync(Stream stream, string owner, bool replaceTransactions)

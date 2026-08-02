@@ -82,8 +82,29 @@ while IFS= read -r path; do
     fail "$path contains a likely secret token or private key."
   fi
 
-  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -Ei -- '(ANTHROPIC_API_KEY|OPENAI_API_KEY|PLAID_SECRET|TAILSCALE_AUTHKEY|DATABASE_PASSWORD|BACKUP_ENCRYPTION_KEY)[[:space:]]*=[[:space:]]*[^[:space:]#<"]+' >/dev/null; then
+  # High-signal populated secret assignments in env, JSON, YAML, Razor, Markdown, or source comments.
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -Ei -- '(^|[^A-Za-z0-9_{])(ANTHROPIC_API_KEY|OPENAI_API_KEY|PLAID_SECRET|TAILSCALE_AUTHKEY|DATABASE_PASSWORD|BACKUP_ENCRYPTION_KEY)[[:space:]]*[:=][[:space:]]*["'\'']?[^[:space:]#<"'\''{$]+' >/dev/null; then
     fail "$path contains a likely populated secret environment variable."
+  fi
+
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -Ei -- '(api[_-]?key|client[_-]?secret|password|passwd|access[_-]?token|refresh[_-]?token|auth[_-]?token|authkey|connectionstring|database_url)[[:space:]"'\'']*[:=][[:space:]]*["'\'']?[A-Za-z0-9_./+=:@-]{12,}' >/dev/null; then
+    fail "$path contains a likely populated credential setting."
+  fi
+
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -E -- 'https?://[^[:space:]/:@]+:[^[:space:]@]+@' >/dev/null; then
+    fail "$path contains a URL with embedded credentials."
+  fi
+
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -E -- '(^|[^0-9])(10\.[0-9]{1,3}\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)' >/dev/null; then
+    fail "$path contains a private LAN IP address."
+  fi
+
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -E -- 'tskey-[A-Za-z0-9_-]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}' >/dev/null; then
+    fail "$path contains a likely auth key or JWT."
+  fi
+
+  if "${content_cmd[@]}" 2>/dev/null | LC_ALL=C grep -E -- '[0-9]{3}-[0-9]{2}-[0-9]{4}|(^|[^0-9])([0-9][ -]?){13,19}([^0-9]|$)' >/dev/null; then
+    fail "$path contains a likely SSN, card, or account-number-shaped value."
   fi
 done <<EOF
 $files

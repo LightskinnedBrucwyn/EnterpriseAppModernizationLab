@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace BatHouseholdHub.Models;
 
 public class HouseholdData
@@ -141,7 +144,7 @@ public class IncomeEvent
     public IncomeStatus Status { get; set; } = IncomeStatus.Estimated;
 }
 
-public class HouseholdFunds
+public class HouseholdFunds : IJsonOnDeserialized
 {
     public decimal PersonA { get; set; }
     public decimal PersonB { get; set; }
@@ -149,6 +152,45 @@ public class HouseholdFunds
     public decimal Buffer { get; set; }
     public DateTime LastUpdated { get; set; } = DateTime.Today;
     public decimal Total => PersonA + PersonB + Shared;
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
+    [JsonIgnore]
+    public bool MigratedLegacyMemberFunds { get; private set; }
+
+    public void OnDeserialized()
+    {
+        if (ExtensionData is null) return;
+
+        if (PersonA == 0m && TryReadLegacyDecimal("Trey", out var personA))
+        {
+            PersonA = personA;
+            MigratedLegacyMemberFunds = true;
+        }
+
+        if (PersonB == 0m && TryReadLegacyDecimal("Jess", out var personB))
+        {
+            PersonB = personB;
+            MigratedLegacyMemberFunds = true;
+        }
+
+        if (ExtensionData.Remove("Trey") || ExtensionData.Remove("Jess"))
+        {
+            MigratedLegacyMemberFunds = true;
+        }
+
+        if (ExtensionData.Count == 0) ExtensionData = null;
+    }
+
+    private bool TryReadLegacyDecimal(string name, out decimal value)
+    {
+        value = 0m;
+        return ExtensionData is not null
+            && ExtensionData.TryGetValue(name, out var element)
+            && element.ValueKind == JsonValueKind.Number
+            && element.TryGetDecimal(out value);
+    }
 }
 
 public class Recipe
