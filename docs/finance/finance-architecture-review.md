@@ -37,7 +37,7 @@ Current finance functionality includes:
 - Bill creation and editing with amount, due day, frequency enum, category, priority, owner, status, autopay, notes, and optional delayed-income linkage.
 - Manual statuses for bills: upcoming, pending, paid, reserved, delayed, needs review, and skipped.
 - Cashflow summaries for until-next-paycheck, month-end, next 30 days, and custom date.
-- Available-funds tracking across Trey, Jess, shared, and buffer buckets.
+- Available-funds tracking across generic household member, shared, and buffer buckets.
 - Income event tracking with estimated, pending, and received statuses.
 - Simple debt-account model exists, though the current UI primarily treats debt as a bill category.
 - One savings goal displayed on the home page.

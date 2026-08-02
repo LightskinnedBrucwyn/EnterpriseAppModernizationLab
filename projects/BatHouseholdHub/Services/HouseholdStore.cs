@@ -25,10 +25,13 @@ public class HouseholdStore
         _path = Path.Combine(folder, "household.json");
         Data = Load();
         var changed = EnsureStarterRecipes();
-        changed |= EnsureKnownBills();
-        changed |= EnsureKnownIncomeSources();
-        changed |= EnsureKnownShoppingSites();
-        changed |= LinkDelayedBillsToIncome();
+        if (environment.IsDevelopment())
+        {
+            changed |= EnsureSyntheticDemoBills();
+            changed |= EnsureSyntheticDemoIncomeSources();
+            changed |= EnsureSyntheticDemoShoppingSites();
+            changed |= LinkSyntheticDelayedBillsToIncome();
+        }
         changed |= ProcessRecurringTransactions();
         if (changed)
             File.WriteAllText(_path, JsonSerializer.Serialize(Data, new JsonSerializerOptions { WriteIndented = true }));
@@ -214,36 +217,16 @@ public class HouseholdStore
         }
     }
 
-    /// <summary>The household's real-world bill list, organized the way Trey actually thinks
-    /// about them. Amounts and due days below come from mining the Rocket Money export for
-    /// recurring patterns; bills with no clear fixed amount are left at 0 with a note instead
-    /// of a guess. Reconciled by name on every startup so renaming/adding here updates existing
-    /// installs without wiping amounts the household has already entered themselves.</summary>
-    private static readonly (string Name, BillCategory Category, decimal Amount, int DueDay, BillFrequency Frequency, BillPriority Priority, string Notes)[] KnownBills =
+    /// <summary>Synthetic development-only demo bills. Production instances start without
+    /// source-controlled household finance seed data.</summary>
+    private static readonly (string Name, BillCategory Category, decimal Amount, int DueDay, BillFrequency Frequency, BillPriority Priority, string Notes)[] SyntheticDemoBills =
     [
-        ("Chase card manual payment", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Manual extra payments vary in amount — update each cycle."),
-        ("Chase autopay", BillCategory.DebtPayment, 163m, 23, BillFrequency.Monthly, BillPriority.Debt, ""),
-        ("Affirm", BillCategory.DebtPayment, 161.44m, 22, BillFrequency.Monthly, BillPriority.Debt, "Combined total of simultaneous installment plans."),
-        ("Klover", BillCategory.DebtPayment, 4.99m, 22, BillFrequency.Monthly, BillPriority.Debt, "Membership fee only — cash advance repayments are separate and vary."),
-        ("Dave", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "Highly variable ($25–$179) with no fixed cadence — confirm amount."),
-        ("Brigit", BillCategory.DebtPayment, 8.99m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Ally car", BillCategory.DebtPayment, 439.44m, 28, BillFrequency.Monthly, BillPriority.Debt, ""),
-        ("SNAP Finance", BillCategory.DebtPayment, 21.50m, 15, BillFrequency.Biweekly, BillPriority.Debt, ""),
-        ("Upgrade", BillCategory.DebtPayment, 0m, 1, BillFrequency.Monthly, BillPriority.Debt, "No matching transactions found — confirm amount and due day."),
-        ("Progressive", BillCategory.FixedBill, 169.66m, 22, BillFrequency.Monthly, BillPriority.Critical, ""),
-        ("Verizon", BillCategory.FixedBill, 64.55m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Rocket Money", BillCategory.FixedBill, 10.66m, 22, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("IdentityIQ", BillCategory.FixedBill, 30.74m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Experian", BillCategory.FixedBill, 27.05m, 10, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Uber One", BillCategory.FixedBill, 9.99m, 28, BillFrequency.Monthly, BillPriority.Optional, ""),
-        ("HBO Max", BillCategory.FixedBill, 5.30m, 22, BillFrequency.Monthly, BillPriority.Optional, "Amount unverified from import — confirm against latest statement."),
-        ("Claude", BillCategory.FixedBill, 21.32m, 27, BillFrequency.Monthly, BillPriority.Subscription, ""),
-        ("Amazon Prime", BillCategory.FixedBill, 16.23m, 22, BillFrequency.Monthly, BillPriority.Subscription, "Prime Video Channels adds another ~$14.06 on a separate charge."),
-        ("City of Davenport", BillCategory.FixedBill, 40m, 3, BillFrequency.Monthly, BillPriority.Critical, ""),
-        ("SoFi transfer", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Rent money moved aside ahead of the due date — treated as reserved, not spendable."),
-        ("Apple Cash transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
-        ("Zelle transfers", BillCategory.TransferSavings, 0m, 1, BillFrequency.Monthly, BillPriority.Optional, "Highly variable transfers, not a fixed bill."),
-        ("Ahmad", BillCategory.FixedBill, 600m, 1, BillFrequency.Monthly, BillPriority.Critical, "Rent owed to Ahmad — delayed until the Vista final check arrives.")
+        ("Example Credit Card Minimum", BillCategory.DebtPayment, 42.00m, 12, BillFrequency.Monthly, BillPriority.Debt, "Synthetic demo value. Replace in private runtime data only."),
+        ("Example Auto Loan", BillCategory.DebtPayment, 210.00m, 20, BillFrequency.Monthly, BillPriority.Debt, "Synthetic demo value."),
+        ("Example Utility", BillCategory.FixedBill, 75.00m, 5, BillFrequency.Monthly, BillPriority.Critical, "Synthetic demo value."),
+        ("Example Phone Plan", BillCategory.FixedBill, 55.00m, 15, BillFrequency.Monthly, BillPriority.Subscription, "Synthetic demo value."),
+        ("Example Rent Reserve", BillCategory.TransferSavings, 300.00m, 1, BillFrequency.Monthly, BillPriority.Critical, "Synthetic reserve example; not real household data."),
+        ("Example Shared Rent", BillCategory.FixedBill, 600.00m, 1, BillFrequency.Monthly, BillPriority.Critical, "Synthetic delayed-payment example.")
     ];
 
     private static MoneyType DefaultMoneyType(BillCategory category) => category switch
@@ -253,10 +236,10 @@ public class HouseholdStore
         _ => MoneyType.Expense
     };
 
-    private bool EnsureKnownBills()
+    private bool EnsureSyntheticDemoBills()
     {
         var changed = false;
-        foreach (var (name, category, amount, dueDay, frequency, priority, notes) in KnownBills)
+        foreach (var (name, category, amount, dueDay, frequency, priority, notes) in SyntheticDemoBills)
         {
             var existing = Data.Bills.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
             if (existing is null)
@@ -266,10 +249,8 @@ public class HouseholdStore
                     Name = name, Category = category, Amount = amount, DueDay = dueDay,
                     Frequency = frequency, Priority = priority, Notes = notes, MoneyType = DefaultMoneyType(category)
                 };
-                // The rent transfer is money already set aside, not spendable; Ahmad's rent
-                // waits on income rather than a due date — see the real-life example in the brief.
-                if (name == "SoFi transfer") { bill.ManualStatus = BillStatus.Reserved; bill.MoneyType = MoneyType.RentReserve; }
-                if (name == "Ahmad") bill.ManualStatus = BillStatus.Delayed;
+                if (name == "Example Rent Reserve") { bill.ManualStatus = BillStatus.Reserved; bill.MoneyType = MoneyType.RentReserve; }
+                if (name == "Example Shared Rent") bill.ManualStatus = BillStatus.Delayed;
                 Data.Bills.Add(bill);
                 changed = true;
                 continue;
@@ -287,16 +268,14 @@ public class HouseholdStore
         return changed;
     }
 
-    /// <summary>Links Ahmad's delayed rent payment to the Vista final check income event so the
-    /// dashboard knows which paycheck unblocks it. Only sets the link if it isn't already set,
-    /// so re-linking never clobbers a household's own choice.</summary>
-    private bool LinkDelayedBillsToIncome()
+    /// <summary>Links a synthetic delayed bill to synthetic income for development demos only.</summary>
+    private bool LinkSyntheticDelayedBillsToIncome()
     {
-        var ahmad = Data.Bills.FirstOrDefault(x => x.Name.Equals("Ahmad", StringComparison.OrdinalIgnoreCase));
-        if (ahmad is null || ahmad.LinkedIncomeEventId is not null) return false;
-        var vista = Data.IncomeEvents.FirstOrDefault(x => x.Source.Equals("Vista final check", StringComparison.OrdinalIgnoreCase));
-        if (vista is null) return false;
-        ahmad.LinkedIncomeEventId = vista.Id;
+        var bill = Data.Bills.FirstOrDefault(x => x.Name.Equals("Example Shared Rent", StringComparison.OrdinalIgnoreCase));
+        if (bill is null || bill.LinkedIncomeEventId is not null) return false;
+        var income = Data.IncomeEvents.FirstOrDefault(x => x.Source.Equals("Example Reimbursement", StringComparison.OrdinalIgnoreCase));
+        if (income is null) return false;
+        bill.LinkedIncomeEventId = income.Id;
         return true;
     }
 
@@ -377,26 +356,24 @@ public class HouseholdStore
         await SaveAsync();
     }
 
-    /// <summary>Starter income sources so the Income timeline isn't empty on first run.
-    /// Amounts are left at 0 — Trey fills in real figures as paychecks come in.</summary>
-    private static readonly string[] KnownIncomeSources = ["ByteForza paycheck", "ByteForza bonus", "Vista final check"];
+    /// <summary>Synthetic development-only income sources so the timeline can be exercised
+    /// without committing household pay data.</summary>
+    private static readonly string[] SyntheticDemoIncomeSources = ["Example Paycheck", "Example Bonus", "Example Reimbursement"];
 
-    private static readonly (string Name, string Url)[] KnownShoppingSites =
+    private static readonly (string Name, string Url)[] SyntheticDemoShoppingSites =
     [
-        ("Amazon", "https://www.amazon.com"),
-        ("Target", "https://www.target.com"),
-        ("SHEIN", "https://www.shein.com"),
-        ("Old Navy", "https://oldnavy.gap.com"),
-        ("Etsy", "https://www.etsy.com")
+        ("Example Marketplace", "https://example.com/market"),
+        ("Example Home Goods", "https://example.com/home"),
+        ("Example Clothing Store", "https://example.com/clothing")
     ];
 
-    private bool EnsureKnownShoppingSites()
+    private bool EnsureSyntheticDemoShoppingSites()
     {
         var changed = false;
-        foreach (var (name, url) in KnownShoppingSites)
+        foreach (var (name, url) in SyntheticDemoShoppingSites)
         {
             if (Data.ShoppingSites.Any(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) continue;
-            Data.ShoppingSites.Add(new ShoppingSite { Name = name, Url = url, Owner = "Jess" });
+            Data.ShoppingSites.Add(new ShoppingSite { Name = name, Url = url, Owner = "Person B" });
             changed = true;
         }
         return changed;
@@ -414,13 +391,13 @@ public class HouseholdStore
         await SaveAsync();
     }
 
-    private bool EnsureKnownIncomeSources()
+    private bool EnsureSyntheticDemoIncomeSources()
     {
         var changed = false;
-        foreach (var source in KnownIncomeSources)
+        foreach (var source in SyntheticDemoIncomeSources)
         {
             if (Data.IncomeEvents.Any(x => x.Source.Equals(source, StringComparison.OrdinalIgnoreCase))) continue;
-            Data.IncomeEvents.Add(new IncomeEvent { Source = source, Owner = "Trey", Status = IncomeStatus.Estimated });
+            Data.IncomeEvents.Add(new IncomeEvent { Source = source, Owner = "Person A", Status = IncomeStatus.Estimated });
             changed = true;
         }
         return changed;
