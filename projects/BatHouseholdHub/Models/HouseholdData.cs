@@ -175,7 +175,9 @@ public class HouseholdFunds : IJsonOnDeserialized
             MigratedLegacyMemberFunds = true;
         }
 
-        if (ExtensionData.Remove("Trey") || ExtensionData.Remove("Jess"))
+        var removedPersonA = ExtensionData.Remove("Trey");
+        var removedPersonB = ExtensionData.Remove("Jess");
+        if (removedPersonA || removedPersonB)
         {
             MigratedLegacyMemberFunds = true;
         }

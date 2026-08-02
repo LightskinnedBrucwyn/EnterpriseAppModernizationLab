@@ -40,10 +40,7 @@ public class HouseholdFundsMigrationTests
         var data = JsonSerializer.Deserialize<HouseholdData>(LegacyJson())!;
         var saved = JsonSerializer.Serialize(data, JsonOptions);
 
-        Assert.Contains("\"PersonA\"", saved);
-        Assert.Contains("\"PersonB\"", saved);
-        Assert.DoesNotContain("\"Trey\"", saved);
-        Assert.DoesNotContain("\"Jess\"", saved);
+        AssertLegacyKeysRemoved(saved);
     }
 
     [Fact]
@@ -58,6 +55,30 @@ public class HouseholdFundsMigrationTests
         Assert.False(secondLoad.Funds.MigratedLegacyMemberFunds);
     }
 
+    public static TheoryData<string, decimal, decimal> LegacyKeyRemovalCases => new()
+    {
+        { LegacyFundsJson(""" "Trey": 101.25, "Jess": 202.50, """), 101.25m, 202.50m },
+        { LegacyFundsJson(""" "Trey": 101.25, """), 101.25m, 0m },
+        { LegacyFundsJson(""" "Jess": 202.50, """), 0m, 202.50m },
+        { LegacyFundsJson(""" "PersonA": 11.11, "Trey": 101.25, """), 11.11m, 0m },
+        { LegacyFundsJson(""" "PersonB": 22.22, "Jess": 202.50, """), 0m, 22.22m }
+    };
+
+    [Theory]
+    [MemberData(nameof(LegacyKeyRemovalCases))]
+    public void LegacyKeysAreRemovedWithoutOverwritingPopulatedGenericValues(string json, decimal expectedPersonA, decimal expectedPersonB)
+    {
+        var data = JsonSerializer.Deserialize<HouseholdData>(json)!;
+        var saved = JsonSerializer.Serialize(data, JsonOptions);
+
+        Assert.Equal(expectedPersonA, data.Funds.PersonA);
+        Assert.Equal(expectedPersonB, data.Funds.PersonB);
+        Assert.Equal(303.75m, data.Funds.Shared);
+        Assert.Equal(40.00m, data.Funds.Buffer);
+        Assert.Equal(new DateTime(2026, 1, 15), data.Funds.LastUpdated);
+        AssertLegacyKeysRemoved(saved);
+    }
+
     private static string LegacyJson() =>
         """
         {
@@ -70,4 +91,24 @@ public class HouseholdFundsMigrationTests
           }
         }
         """;
+
+    private static string LegacyFundsJson(string memberFields) =>
+        $$"""
+        {
+          "Funds": {
+            {{memberFields}}
+            "Shared": 303.75,
+            "Buffer": 40.00,
+            "LastUpdated": "2026-01-15T00:00:00"
+          }
+        }
+        """;
+
+    private static void AssertLegacyKeysRemoved(string saved)
+    {
+        Assert.Contains("\"PersonA\"", saved);
+        Assert.Contains("\"PersonB\"", saved);
+        Assert.DoesNotContain("\"Trey\"", saved);
+        Assert.DoesNotContain("\"Jess\"", saved);
+    }
 }
