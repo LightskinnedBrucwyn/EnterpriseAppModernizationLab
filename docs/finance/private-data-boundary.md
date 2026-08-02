@@ -12,6 +12,10 @@ Runtime deployment: private, LAN/Tailscale only.
 
 The repository must be treated as public even when the app itself is designed for private household use. BatHouseholdHub source control can contain implementation plans, synthetic examples, and documentation; BatServer is the private boundary for real household finance data, uploaded files, imports, approvals, backups, and audit logs.
 
+Repository hygiene checks are not application authentication. `.gitignore`, fixture rules, and `scripts/check-repository-hygiene.sh` reduce the chance of committing private data, but they do not protect a running BatHouseholdHub instance. LAN/Tailscale exposure still requires authentication, authorization, least-privilege access, and review before real household finance workflows are trusted.
+
+Runtime `household.json` is plaintext unless protected by host-level controls such as private filesystem permissions, encrypted disks or volumes, restricted service accounts, and encrypted backups. Treat every runtime copy, migration backup, restore snapshot, and backup archive as private financial data.
+
 ## Belongs in Public GitHub
 
 The public GitHub repository may contain:
@@ -34,6 +38,7 @@ The following must stay only on BatServer or other approved private backup stora
 
 - `household.json` and any replacement database.
 - `App_Data`, `data`, uploads, data-protection keys, corrupt JSON backups, and local restore files.
+- Schema-migration backups created beside runtime JSON files.
 - Rocket Money CSV exports.
 - Bank, card, loan, payroll, credit-report, and collection-account files.
 - Statements, paystubs, tax forms, receipts, PDFs, Excel workbooks, screenshots, and credit-report captures.
@@ -105,6 +110,7 @@ Minimum expectations:
 - Include `household.json` or the future database, uploads, and data-protection keys together so encrypted app artifacts remain usable.
 - Keep backup retention short enough to limit exposure but long enough to recover from accidental deletion or corrupt writes.
 - Do not commit backup archives or restore snapshots.
+- Do not commit schema-migration backups; they inherit the same protections as `household.json`.
 
 Future implementation should add a documented `backup`, `restore-dry-run`, and `restore` process with explicit paths and redaction safeguards.
 
